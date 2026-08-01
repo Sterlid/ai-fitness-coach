@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MealLogForm } from '../meals/MealLogForm';
 import { supabase } from '../../lib/supabase';
@@ -8,21 +8,29 @@ import { colors } from '../../theme/colors';
 import type { Database } from '../../types/database';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
+type MealMetadata = { meal_type?: string; serving?: string | null };
+
+function mealMetadata(value: Meal['analysis_metadata']): MealMetadata {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return value as MealMetadata;
+}
 
 export function HomeScreen() {
   const { user } = useAuth();
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [mealImageUrls, setMealImageUrls] = useState<Record<string, string>>({});
   const [isLoadingMeals, setIsLoadingMeals] = useState(true);
 
   const loadMeals = useCallback(async () => {
     if (!supabase || !user) return;
+    const client = supabase;
 
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
 
-    const { data } = await supabase
+    const { data } = await client
       .from('meals')
       .select('*')
       .eq('user_id', user.id)
@@ -30,7 +38,19 @@ export function HomeScreen() {
       .lt('eaten_at', end.toISOString())
       .order('eaten_at', { ascending: false });
 
-    setMeals(data ?? []);
+    const loadedMeals = data ?? [];
+    setMeals(loadedMeals);
+    const imageEntries = await Promise.all(
+      loadedMeals
+        .filter((meal) => meal.image_path)
+        .map(async (meal) => {
+          const { data: imageData } = await client.storage.from('meal-images').createSignedUrl(meal.image_path!, 3600);
+          return [meal.id, imageData?.signedUrl] as const;
+        }),
+    );
+    setMealImageUrls(
+      Object.fromEntries(imageEntries.filter((entry): entry is [string, string] => Boolean(entry[1]))),
+    );
     setIsLoadingMeals(false);
   }, [user]);
 
@@ -69,11 +89,15 @@ export function HomeScreen() {
       {!isLoadingMeals && !meals.length ? <Text style={styles.empty}>Your logged meals will appear here.</Text> : null}
       {meals.map((meal) => (
         <View key={meal.id} style={styles.mealRow}>
+          {mealImageUrls[meal.id] ? <Image source={{ uri: mealImageUrls[meal.id] }} style={styles.mealImage} /> : null}
           <View style={styles.mealInfo}>
             <Text style={styles.mealName}>{meal.name || 'Unnamed meal'}</Text>
-            <Text style={styles.mealMeta}>{new Date(meal.eaten_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+            <Text style={styles.mealMeta}>
+              {mealMetadata(meal.analysis_metadata).meal_type || 'Meal'} · {new Date(meal.eaten_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+            </Text>
+            {meal.description ? <Text numberOfLines={1} style={styles.mealDescription}>{meal.description}</Text> : null}
           </View>
-          <Text style={styles.mealCalories}>{meal.estimated_calories ?? 0} kcal</Text>
+          <Text style={styles.mealCalories}>{meal.estimated_calories === null ? '—' : `${meal.estimated_calories} kcal`}</Text>
         </View>
       ))}
       <Pressable onPress={() => void supabase?.auth.signOut()}>
@@ -96,9 +120,11 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', marginTop: 30 },
   empty: { color: colors.muted, fontSize: 14, marginTop: 10 },
   mealRow: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, padding: 15 },
+  mealImage: { borderRadius: 10, height: 54, marginRight: 11, width: 54 },
   mealInfo: { flex: 1 },
   mealName: { color: colors.ink, fontSize: 15, fontWeight: '800' },
   mealMeta: { color: colors.muted, fontSize: 13, marginTop: 4 },
+  mealDescription: { color: colors.muted, fontSize: 12, marginTop: 4 },
   mealCalories: { color: colors.primaryDark, fontSize: 14, fontWeight: '800' },
   signOut: { color: colors.danger, fontSize: 15, fontWeight: '700', marginTop: 28, textAlign: 'center' },
 });
