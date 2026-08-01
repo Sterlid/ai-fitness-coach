@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 
-import { supabase } from '../../lib/supabase';
+import { setRememberMePreference, supabase } from '../../lib/supabase';
 import { colors } from '../../theme/colors';
 
 export type AuthMode = 'sign-in' | 'sign-up';
@@ -24,6 +24,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const passwordRules = [
@@ -58,6 +59,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 
     setIsSubmitting(true);
     setFeedback(null);
+    setRememberMePreference(mode === 'sign-in' ? rememberMe : true);
 
     try {
       const result =
@@ -178,6 +180,14 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
             ))}
           </View>
         ) : null}
+        {mode === 'sign-in' ? (
+          <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
+            <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
+              {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.rememberText}>Remember me on this device</Text>
+          </Pressable>
+        ) : null}
         {feedback ? (
           <Text style={feedback.kind === 'error' ? styles.errorText : styles.successText}>
             {feedback.text}
@@ -289,6 +299,11 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: colors.primaryDark, fontSize: 15, fontWeight: '700', textAlign: 'center' },
   errorText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   successText: { color: colors.primaryDark, fontSize: 14, lineHeight: 20 },
+  rememberRow: { alignItems: 'center', flexDirection: 'row', gap: 10, paddingVertical: 2 },
+  checkbox: { alignItems: 'center', borderColor: colors.border, borderRadius: 5, borderWidth: 1, height: 20, justifyContent: 'center', width: 20 },
+  checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxMark: { color: colors.white, fontSize: 14, fontWeight: '800', lineHeight: 18 },
+  rememberText: { color: colors.muted, fontSize: 14 },
   passwordChecker: { backgroundColor: colors.surface, borderRadius: 12, padding: 14 },
   passwordCheckerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 6 },
   passwordRuleRow: { borderRadius: 8, marginTop: 4, paddingHorizontal: 8, paddingVertical: 3 },
