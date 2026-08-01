@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import 'expo-sqlite/localStorage/install';
+import { Platform } from 'react-native';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -14,8 +15,7 @@ export const supabase = isSupabaseConfigured
         storage: globalThis.localStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: Platform.OS === 'web',
       },
     })
   : null;
-

@@ -1,9 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { EmailAuthForm } from './src/features/auth/EmailAuthForm';
+import { AuthScreen } from './src/features/auth/AuthScreen';
 import { HomeScreen } from './src/features/home/HomeScreen';
+import { OnboardingScreen } from './src/features/onboarding/OnboardingScreen';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
+import { supabase } from './src/lib/supabase';
 import { colors } from './src/theme/colors';
 import { isSupabaseConfigured } from './src/lib/supabase';
 
@@ -30,7 +33,47 @@ function AppContent() {
     );
   }
 
-  return session ? <HomeScreen /> : <EmailAuthForm />;
+  return session ? <AuthenticatedApp /> : <AuthScreen />;
+}
+
+function AuthenticatedApp() {
+  const { user } = useAuth();
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+
+  useEffect(() => {
+    if (!user || !supabase) return;
+
+    let isMounted = true;
+    void supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!isMounted) return;
+        setOnboardingComplete(data?.onboarding_completed === true);
+        setIsCheckingProfile(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  if (isCheckingProfile) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  return onboardingComplete ? (
+    <HomeScreen />
+  ) : (
+    <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />
+  );
 }
 
 export default function App() {
@@ -62,4 +105,3 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, fontSize: 34, fontWeight: '800', marginBottom: 12 },
   body: { color: colors.muted, fontSize: 17, lineHeight: 25 },
 });
-
