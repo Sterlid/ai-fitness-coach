@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "AI Fitness Coach",
+    "slug": "ai-fitness-tracker",
+    "version": "0.1.0",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

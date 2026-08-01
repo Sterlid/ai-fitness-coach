@@ -1,0 +1,65 @@
+import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+
+import { EmailAuthForm } from './src/features/auth/EmailAuthForm';
+import { HomeScreen } from './src/features/home/HomeScreen';
+import { AuthProvider, useAuth } from './src/providers/AuthProvider';
+import { colors } from './src/theme/colors';
+import { isSupabaseConfigured } from './src/lib/supabase';
+
+function AppContent() {
+  const { isLoading, session } = useAuth();
+
+  if (!isSupabaseConfigured) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.eyebrow}>SETUP REQUIRED</Text>
+        <Text style={styles.title}>Connect Supabase</Text>
+        <Text style={styles.body}>
+          Copy .env.example to .env, then add your project URL and publishable key.
+        </Text>
+      </View>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  return session ? <HomeScreen /> : <EmailAuthForm />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <AppContent />
+      </SafeAreaView>
+    </AuthProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    backgroundColor: colors.background,
+  },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginBottom: 10,
+  },
+  title: { color: colors.ink, fontSize: 34, fontWeight: '800', marginBottom: 12 },
+  body: { color: colors.muted, fontSize: 17, lineHeight: 25 },
+});
+
