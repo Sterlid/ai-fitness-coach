@@ -15,6 +15,9 @@ import { colors } from '../../theme/colors';
 
 export type AuthMode = 'sign-in' | 'sign-up';
 
+const minimumDateOfBirth = '1900-01-01';
+const dateTooEarlyMessage = 'Unless you have a time machine, please choose a date from 1900 onward.';
+
 type EmailAuthFormProps = {
   mode: AuthMode;
   onSwitchMode: (mode: AuthMode) => void;
@@ -35,6 +38,8 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
     { label: 'One number or symbol', met: /[0-9]/.test(password) || /[^A-Za-z0-9\s]/.test(password) },
   ];
   const isStrongPassword = passwordRules.every((rule) => rule.met);
+  const dateOfBirthIsTooEarly =
+    mode === 'sign-up' && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) && dateOfBirth < minimumDateOfBirth;
 
   const submit = async (mode: 'sign-in' | 'sign-up') => {
     if (!supabase || !email || password.length < 8 || (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth))) {
@@ -50,6 +55,11 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 
     if (mode === 'sign-up' && !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
       setFeedback({ kind: 'error', text: 'Enter your date of birth as YYYY-MM-DD.' });
+      return;
+    }
+
+    if (mode === 'sign-up' && dateOfBirth < '1900-01-01') {
+      setFeedback({ kind: 'error', text: dateTooEarlyMessage });
       return;
     }
 
@@ -139,7 +149,8 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
               value={fullName}
             />
             <Text style={styles.fieldLabel}>Date of birth</Text>
-            <DateOfBirthField value={dateOfBirth} onChange={setDateOfBirth} />
+            <DateOfBirthField invalid={dateOfBirthIsTooEarly} value={dateOfBirth} onChange={setDateOfBirth} />
+            {dateOfBirthIsTooEarly ? <Text style={styles.fieldError}>{dateTooEarlyMessage}</Text> : null}
           </>
         ) : null}
         <TextInput
@@ -218,17 +229,20 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 }
 
 type DateOfBirthFieldProps = {
+  invalid: boolean;
   value: string;
   onChange: (value: string) => void;
 };
 
-function DateOfBirthField({ value, onChange }: DateOfBirthFieldProps) {
+function DateOfBirthField({ invalid, value, onChange }: DateOfBirthFieldProps) {
   if (Platform.OS === 'web') {
     return createElement('input', {
       'aria-label': 'Date of birth',
+      'aria-invalid': invalid,
       max: new Date().toISOString().slice(0, 10),
+      min: minimumDateOfBirth,
       onChange: (event: { target: { value: string } }) => onChange(event.target.value),
-      style: webDateInputStyle,
+      style: invalid ? { ...webDateInputStyle, ...webDateInputInvalidStyle } : webDateInputStyle,
       type: 'date',
       value,
     });
@@ -242,7 +256,7 @@ function DateOfBirthField({ value, onChange }: DateOfBirthFieldProps) {
       onChangeText={onChange}
       placeholder="Date of birth (YYYY-MM-DD)"
       placeholderTextColor={colors.muted}
-      style={styles.input}
+      style={[styles.input, invalid && styles.invalidInput]}
       value={value}
     />
   );
@@ -267,6 +281,11 @@ const webDateInputStyle = {
   width: '100%',
 };
 
+const webDateInputInvalidStyle = {
+  borderColor: colors.danger,
+  borderWidth: 2,
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   eyebrow: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
@@ -276,6 +295,7 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 17, lineHeight: 25, marginTop: 10 },
   form: { gap: 14, marginTop: 32 },
   fieldLabel: { color: colors.ink, fontSize: 14, fontWeight: '700', marginBottom: -6 },
+  fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: -8 },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -286,6 +306,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 15,
   },
+  invalidInput: { borderColor: colors.danger, borderWidth: 2 },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.primary,

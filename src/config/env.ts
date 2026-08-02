@@ -4,6 +4,7 @@ const configuredAuthRedirectUrl = process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL?.tri
 
 const isPlaceholder = (value: string | undefined) =>
   !value || value.includes('YOUR_') || value.includes('example');
+const isLocalUrl = (value: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(?:\/|$)/i.test(value);
 
 export const env = {
   supabaseUrl,
@@ -19,9 +20,11 @@ export const env = {
  * and production confirmation links on the correct site.
  */
 export function getAuthRedirectUrl() {
-  const redirectUrl =
-    configuredAuthRedirectUrl ||
-    (typeof window !== 'undefined' && window.location.origin ? window.location.origin : undefined);
+  const browserOrigin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : undefined;
+  const configuredMatchesCurrentEnvironment =
+    configuredAuthRedirectUrl &&
+    (!browserOrigin || isLocalUrl(configuredAuthRedirectUrl) === isLocalUrl(browserOrigin));
+  const redirectUrl = configuredMatchesCurrentEnvironment ? configuredAuthRedirectUrl : browserOrigin;
 
   if (!redirectUrl) return undefined;
   return redirectUrl.endsWith('/') ? redirectUrl : `${redirectUrl}/`;
