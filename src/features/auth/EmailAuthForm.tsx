@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { setRememberMePreference, supabase } from '../../lib/supabase';
+import { getAuthRedirectUrl } from '../../config/env';
 import { colors } from '../../theme/colors';
 
 export type AuthMode = 'sign-in' | 'sign-up';
@@ -69,10 +70,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
               email: email.trim(),
               password,
               options: {
-                emailRedirectTo:
-                  Platform.OS === 'web' && typeof window !== 'undefined'
-                    ? window.location.origin
-                    : undefined,
+                emailRedirectTo: getAuthRedirectUrl(),
                 data: {
                   display_name: fullName.trim(),
                   date_of_birth: dateOfBirth,
