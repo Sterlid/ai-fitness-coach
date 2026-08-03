@@ -3,15 +3,29 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { AuthScreen } from './src/features/auth/AuthScreen';
+import { PasswordResetScreen } from './src/features/auth/PasswordResetScreen';
 import { HomeScreen } from './src/features/home/HomeScreen';
 import { OnboardingScreen } from './src/features/onboarding/OnboardingScreen';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
 import { supabase } from './src/lib/supabase';
 import { colors } from './src/theme/colors';
 import { isSupabaseConfigured } from './src/lib/supabase';
+import { navigateToPath, useAppPath } from './src/navigation/webRouter';
 
 function AppContent() {
   const { isLoading, session } = useAuth();
+  const path = useAppPath();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!isSupabaseConfigured) {
+      navigateToPath('/setup', true);
+      return;
+    }
+
+    if (!session && path !== '/reset-password') navigateToPath('/login', true);
+  }, [isLoading, path, session]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -32,6 +46,8 @@ function AppContent() {
       </View>
     );
   }
+
+  if (path === '/reset-password') return <PasswordResetScreen />;
 
   return session ? <AuthenticatedApp /> : <AuthScreen />;
 }
@@ -60,6 +76,10 @@ function AuthenticatedApp() {
       isMounted = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!isCheckingProfile) navigateToPath(onboardingComplete ? '/home' : '/setup', true);
+  }, [isCheckingProfile, onboardingComplete]);
 
   if (isCheckingProfile) {
     return (

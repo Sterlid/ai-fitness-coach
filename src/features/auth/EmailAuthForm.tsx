@@ -13,7 +13,7 @@ import { setRememberMePreference, supabase } from '../../lib/supabase';
 import { getAuthRedirectUrl } from '../../config/env';
 import { colors } from '../../theme/colors';
 
-export type AuthMode = 'sign-in' | 'sign-up';
+export type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
 
 const minimumDateOfBirth = '1900-01-01';
 const dateTooEarlyMessage = 'Unless you have a time machine, please choose a date from 1900 onward.';
@@ -41,12 +41,14 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   const dateOfBirthIsTooEarly =
     mode === 'sign-up' && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) && dateOfBirth < minimumDateOfBirth;
 
-  const submit = async (mode: 'sign-in' | 'sign-up') => {
-    if (!supabase || !email || password.length < 8 || (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth))) {
+  const submit = async (mode: AuthMode) => {
+    if (!supabase || !email || (mode !== 'forgot-password' && password.length < 8) || (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth))) {
       setFeedback({
         kind: 'error',
         text:
-          mode === 'sign-up'
+          mode === 'forgot-password'
+            ? 'Enter the email address for your account.'
+            : mode === 'sign-up'
             ? 'Enter your name, date of birth, email, and a password of at least 8 characters.'
             : 'Enter an email and a password of at least 8 characters.',
       });
@@ -73,6 +75,20 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
     setRememberMePreference(mode === 'sign-in' ? rememberMe : true);
 
     try {
+      if (mode === 'forgot-password') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: getAuthRedirectUrl('/reset-password'),
+        });
+
+        if (error) {
+          setFeedback({ kind: 'error', text: error.message });
+          return;
+        }
+
+        setFeedback({ kind: 'success', text: 'Check your inbox for a secure password reset link.' });
+        return;
+      }
+
       const result =
         mode === 'sign-in'
           ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
@@ -128,13 +144,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   return (
     <View style={mode === 'sign-up' ? [styles.container, styles.signUpContainer] : styles.container}>
       <Text style={mode === 'sign-up' ? [styles.eyebrow, styles.signUpEyebrow] : styles.eyebrow}>
-        {mode === 'sign-in' ? 'AI FITNESS COACH' : 'YOUR STARTING POINT'}
+        {mode === 'sign-in' ? 'AI FITNESS COACH' : mode === 'forgot-password' ? 'ACCOUNT RECOVERY' : 'YOUR STARTING POINT'}
       </Text>
-      <Text style={styles.title}>{mode === 'sign-in' ? 'Welcome back.' : 'Create your account.'}</Text>
+      <Text style={styles.title}>
+        {mode === 'sign-in' ? 'Welcome back.' : mode === 'forgot-password' ? 'Reset your password.' : 'Create your account.'}
+      </Text>
       <Text style={styles.subtitle}>
         {mode === 'sign-in'
           ? 'Sign in to continue your fitness journey.'
-          : 'Create an account to log meals and get workouts that adapt to you.'}
+          : mode === 'forgot-password'
+            ? 'Enter your email and we’ll send you a secure reset link.'
+            : 'Create an account to log meals and get workouts that adapt to you.'}
       </Text>
       <View style={styles.form}>
         {mode === 'sign-up' ? (
@@ -163,15 +183,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
           style={styles.input}
           value={email}
         />
-        <TextInput
-          autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
-          onChangeText={setPassword}
-          placeholder="Password"
-          placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          value={password}
-        />
+        {mode !== 'forgot-password' ? (
+          <TextInput
+            autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor={colors.muted}
+            secureTextEntry
+            style={styles.input}
+            value={password}
+          />
+        ) : null}
         {mode === 'sign-up' ? (
           <View style={styles.passwordChecker}>
             <Text style={styles.passwordCheckerTitle}>
@@ -190,12 +212,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
           </View>
         ) : null}
         {mode === 'sign-in' ? (
-          <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
-            <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
-              {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
-            </View>
-            <Text style={styles.rememberText}>Remember me on this device</Text>
-          </Pressable>
+          <View style={styles.signInOptions}>
+            <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
+              <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
+                {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
+              </View>
+              <Text style={styles.rememberText}>Remember me on this device</Text>
+            </Pressable>
+            <Pressable onPress={() => onSwitchMode('forgot-password')}>
+              <Text style={styles.forgotPassword}>Forgot password?</Text>
+            </Pressable>
+          </View>
         ) : null}
         {feedback ? (
           <Text style={feedback.kind === 'error' ? styles.errorText : styles.successText}>
@@ -211,13 +238,13 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
             <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.primaryButtonText}>
-              {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+              {mode === 'sign-in' ? 'Sign in' : mode === 'forgot-password' ? 'Send reset link' : 'Create account'}
             </Text>
           )}
         </Pressable>
         <Pressable
           disabled={isSubmitting}
-          onPress={() => onSwitchMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
+          onPress={() => onSwitchMode(mode === 'sign-up' ? 'sign-in' : 'sign-in')}
         >
           <Text style={styles.secondaryButtonText}>
             {mode === 'sign-in' ? 'Create an account' : 'Back to sign in'}
@@ -319,10 +346,12 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   successText: { color: colors.primaryDark, fontSize: 14, lineHeight: 20 },
   rememberRow: { alignItems: 'center', flexDirection: 'row', gap: 10, paddingVertical: 2 },
+  signInOptions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   checkbox: { alignItems: 'center', borderColor: colors.border, borderRadius: 5, borderWidth: 1, height: 20, justifyContent: 'center', width: 20 },
   checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxMark: { color: colors.white, fontSize: 14, fontWeight: '800', lineHeight: 18 },
   rememberText: { color: colors.muted, fontSize: 14 },
+  forgotPassword: { color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
   passwordChecker: { backgroundColor: colors.surface, borderRadius: 12, padding: 14 },
   passwordCheckerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 6 },
   passwordRuleRow: { borderRadius: 8, marginTop: 4, paddingHorizontal: 8, paddingVertical: 3 },

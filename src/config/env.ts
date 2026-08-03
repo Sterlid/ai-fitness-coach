@@ -19,7 +19,7 @@ export const env = {
  * the origin that the user is currently visiting. This keeps local, preview,
  * and production confirmation links on the correct site.
  */
-export function getAuthRedirectUrl() {
+export function getAuthRedirectUrl(path = '/') {
   const browserOrigin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : undefined;
   const configuredMatchesCurrentEnvironment =
     configuredAuthRedirectUrl &&
@@ -27,5 +27,6 @@ export function getAuthRedirectUrl() {
   const redirectUrl = configuredMatchesCurrentEnvironment ? configuredAuthRedirectUrl : browserOrigin;
 
   if (!redirectUrl) return undefined;
-  return redirectUrl.endsWith('/') ? redirectUrl : `${redirectUrl}/`;
+  const baseUrl = redirectUrl.endsWith('/') ? redirectUrl : `${redirectUrl}/`;
+  return new URL(path, baseUrl).toString();
 }

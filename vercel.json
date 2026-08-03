@@ -2,5 +2,15 @@
   "framework": null,
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "rewrites": [
+    { "source": "/home", "destination": "/" },
+    { "source": "/home/", "destination": "/" },
+    { "source": "/login", "destination": "/" },
+    { "source": "/login/", "destination": "/" },
+    { "source": "/reset-password", "destination": "/" },
+    { "source": "/reset-password/", "destination": "/" },
+    { "source": "/setup", "destination": "/" },
+    { "source": "/setup/", "destination": "/" }
+  ]
 }
