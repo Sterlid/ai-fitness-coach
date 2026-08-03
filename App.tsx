@@ -13,19 +13,26 @@ import { isSupabaseConfigured } from './src/lib/supabase';
 import { navigateToPath, useAppPath } from './src/navigation/webRouter';
 
 function AppContent() {
-  const { isLoading, session } = useAuth();
+  const { clearPasswordRecovery, isLoading, isPasswordRecovery, session } = useAuth();
   const path = useAppPath();
 
   useEffect(() => {
     if (isLoading) return;
+
+    if (path === '/reset-password') {
+      if (!isPasswordRecovery || !session) navigateToPath('/login', true);
+      return;
+    }
+
+    if (isPasswordRecovery) clearPasswordRecovery();
 
     if (!isSupabaseConfigured) {
       navigateToPath('/setup', true);
       return;
     }
 
-    if (!session && path !== '/reset-password') navigateToPath('/login', true);
-  }, [isLoading, path, session]);
+    if (!session) navigateToPath('/login', true);
+  }, [clearPasswordRecovery, isLoading, isPasswordRecovery, path, session]);
 
   if (!isSupabaseConfigured) {
     return (
