@@ -42,15 +42,27 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
     mode === 'sign-up' && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) && dateOfBirth < minimumDateOfBirth;
 
   const submit = async (mode: AuthMode) => {
-    if (!supabase || !email || (mode !== 'forgot-password' && password.length < 8) || (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth))) {
+    const normalizedEmail = email.trim();
+
+    if (!supabase) {
+      setFeedback({ kind: 'error', text: 'Supabase is not configured for this environment.' });
+      return;
+    }
+
+    if (mode === 'forgot-password' && !normalizedEmail) {
+      setFeedback({ kind: 'error', text: 'Enter your email address to request a reset link.' });
+      return;
+    }
+
+    if (mode === 'sign-in' && (!normalizedEmail || !password)) {
+      setFeedback({ kind: 'error', text: 'Enter both your email and password.' });
+      return;
+    }
+
+    if (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth || !normalizedEmail || !password)) {
       setFeedback({
         kind: 'error',
-        text:
-          mode === 'forgot-password'
-            ? 'Enter the email address for your account.'
-            : mode === 'sign-up'
-            ? 'Enter your name, date of birth, email, and a password of at least 8 characters.'
-            : 'Enter an email and a password of at least 8 characters.',
+        text: 'Complete your name, date of birth, email, and password fields.',
       });
       return;
     }
@@ -76,7 +88,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 
     try {
       if (mode === 'forgot-password') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
           redirectTo: getAuthRedirectUrl('/reset-password'),
         });
 
@@ -91,9 +103,9 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 
       const result =
         mode === 'sign-in'
-          ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
+          ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
           : await supabase.auth.signUp({
-              email: email.trim(),
+              email: normalizedEmail,
               password,
               options: {
                 emailRedirectTo: getAuthRedirectUrl(),
@@ -108,10 +120,15 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
       if (result.error) {
         const isDuplicateEmail =
           mode === 'sign-up' && result.error.message.toLowerCase().includes('already registered');
+        const isInvalidCredentials =
+          mode === 'sign-in' &&
+          (result.error.code === 'invalid_credentials' || result.error.message.toLowerCase() === 'invalid login credentials');
         setFeedback({
           kind: 'error',
           text: isDuplicateEmail
             ? 'An account with this email already exists. Try signing in instead.'
+            : isInvalidCredentials
+            ? 'The email or password is incorrect.'
             : result.error.message,
         });
         return;
