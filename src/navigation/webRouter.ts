@@ -1,13 +1,13 @@
 import { Platform } from 'react-native';
 import { useEffect, useState } from 'react';
 
-export type AppPath = '/' | '/login' | '/setup' | '/home' | '/reset-password';
+export type AppPath = '/' | '/login' | '/sign-up' | '/setup' | '/home' | '/reset-password';
 
 function currentPath(): AppPath {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return '/';
 
   const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/';
-  return normalizedPath === '/login' || normalizedPath === '/setup' || normalizedPath === '/home' || normalizedPath === '/reset-password'
+  return normalizedPath === '/login' || normalizedPath === '/sign-up' || normalizedPath === '/setup' || normalizedPath === '/home' || normalizedPath === '/reset-password'
     ? normalizedPath
     : '/';
 }

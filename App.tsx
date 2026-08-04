@@ -31,7 +31,7 @@ function AppContent() {
       return;
     }
 
-    if (!session) navigateToPath('/login', true);
+    if (!session && path !== '/sign-up') navigateToPath('/login', true);
   }, [clearPasswordRecovery, isLoading, isPasswordRecovery, path, session]);
 
   if (!isSupabaseConfigured) {
@@ -56,7 +56,7 @@ function AppContent() {
 
   if (path === '/reset-password') return <PasswordResetScreen />;
 
-  return session ? <AuthenticatedApp /> : <AuthScreen />;
+  return session ? <AuthenticatedApp /> : <AuthScreen initialMode={path === '/sign-up' ? 'sign-up' : 'sign-in'} />;
 }
 
 function AuthenticatedApp() {

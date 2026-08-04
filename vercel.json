@@ -8,6 +8,8 @@
     { "source": "/home/", "destination": "/" },
     { "source": "/login", "destination": "/" },
     { "source": "/login/", "destination": "/" },
+    { "source": "/sign-up", "destination": "/" },
+    { "source": "/sign-up/", "destination": "/" },
     { "source": "/reset-password", "destination": "/" },
     { "source": "/reset-password/", "destination": "/" },
     { "source": "/setup", "destination": "/" },

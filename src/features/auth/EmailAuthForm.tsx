@@ -261,7 +261,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
         </Pressable>
         <Pressable
           disabled={isSubmitting}
-          onPress={() => onSwitchMode(mode === 'sign-up' ? 'sign-in' : 'sign-in')}
+          onPress={() => onSwitchMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
         >
           <Text style={styles.secondaryButtonText}>
             {mode === 'sign-in' ? 'Create an account' : 'Back to sign in'}
@@ -280,16 +280,29 @@ type DateOfBirthFieldProps = {
 
 function DateOfBirthField({ invalid, value, onChange }: DateOfBirthFieldProps) {
   if (Platform.OS === 'web') {
-    return createElement('input', {
-      'aria-label': 'Date of birth',
-      'aria-invalid': invalid,
-      max: new Date().toISOString().slice(0, 10),
-      min: minimumDateOfBirth,
-      onChange: (event: { target: { value: string } }) => onChange(event.target.value),
-      style: invalid ? { ...webDateInputStyle, ...webDateInputInvalidStyle } : webDateInputStyle,
-      type: 'date',
-      value,
-    });
+    return (
+      <View style={invalid ? [webDateFieldStyle, webDateFieldInvalidStyle] : webDateFieldStyle}>
+        <Text style={value ? webDateValueStyle : webDatePlaceholderStyle}>
+          {formatDateForDisplay(value)}
+        </Text>
+        <View pointerEvents="none" style={webCalendarIcon}>
+          <View style={webCalendarIconTop} />
+          <View style={webCalendarIconRingLeft} />
+          <View style={webCalendarIconRingRight} />
+        </View>
+        {createElement('input', {
+          'aria-label': 'Date of birth',
+          'aria-invalid': invalid,
+          max: new Date().toISOString().slice(0, 10),
+          min: minimumDateOfBirth,
+          onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+          onClick: openWebDatePicker,
+          style: webDatePickerInputStyle,
+          type: 'date',
+          value,
+        })}
+      </View>
+    );
   }
 
   return (
@@ -306,28 +319,103 @@ function DateOfBirthField({ invalid, value, onChange }: DateOfBirthFieldProps) {
   );
 }
 
-const webDateInputStyle = {
-  appearance: 'auto',
+function openWebDatePicker(event: { currentTarget: { focus: () => void; showPicker?: () => void } }) {
+  event.currentTarget.focus();
+
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {
+    // Browsers without showPicker still retain the native calendar-icon behavior.
+  }
+}
+
+function formatDateForDisplay(value: string) {
+  if (!value) return 'dd/mm/yyyy';
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+const webDateFieldStyle = {
   backgroundColor: colors.surface,
   borderColor: colors.border,
   borderRadius: 14,
-  borderStyle: 'solid',
+  borderStyle: 'solid' as const,
   borderWidth: 1,
-  boxSizing: 'border-box',
+  boxSizing: 'border-box' as const,
+  flexDirection: 'row' as const,
+  height: 52,
+  alignItems: 'center' as const,
+  justifyContent: 'space-between' as const,
+  paddingHorizontal: 16,
+  position: 'relative' as const,
+  width: '100%' as const,
+};
+
+const webDateFieldInvalidStyle = {
+  borderColor: colors.danger,
+  borderWidth: 2,
+};
+
+const webDateValueStyle = {
   color: colors.ink,
   fontFamily: 'inherit',
   fontSize: 16,
-  fontWeight: '400',
-  height: 52,
-  lineHeight: '20px',
-  padding: '15px 16px',
-  WebkitAppearance: 'auto',
-  width: '100%',
+  fontWeight: '400' as const,
 };
 
-const webDateInputInvalidStyle = {
-  borderColor: colors.danger,
+const webDatePlaceholderStyle = {
+  ...webDateValueStyle,
+  color: colors.muted,
+};
+
+const webDatePickerInputStyle = {
+  bottom: 0,
+  cursor: 'pointer',
+  height: '100%',
+  left: 0,
+  opacity: 0,
+  position: 'absolute' as const,
+  right: 0,
+  top: 0,
+  width: '100%' as const,
+};
+
+const webCalendarIcon = {
+  borderColor: colors.ink,
+  borderRadius: 3,
   borderWidth: 2,
+  height: 19,
+  position: 'relative' as const,
+  width: 20,
+};
+
+const webCalendarIconTop = {
+  backgroundColor: colors.ink,
+  height: 2,
+  left: 0,
+  position: 'absolute' as const,
+  right: 0,
+  top: 4,
+};
+
+const webCalendarIconRingLeft = {
+  backgroundColor: colors.ink,
+  borderRadius: 2,
+  height: 5,
+  position: 'absolute' as const,
+  right: 11,
+  top: -4,
+  width: 3,
+};
+
+const webCalendarIconRingRight = {
+  backgroundColor: colors.ink,
+  borderRadius: 2,
+  height: 5,
+  position: 'absolute' as const,
+  right: 3,
+  top: -4,
+  width: 3,
 };
 
 const styles = StyleSheet.create({
