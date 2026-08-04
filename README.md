@@ -42,9 +42,13 @@ In the Supabase dashboard, copy the project URL and publishable key into `.env`:
 ```dotenv
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+# Optional. The app otherwise uses the current browser origin.
+EXPO_PUBLIC_AUTH_REDIRECT_URL=https://your-production-domain.example.com/
 ```
 
 Restart Expo after changing environment variables.
+
+For hosted deployments, set `EXPO_PUBLIC_AUTH_REDIRECT_URL` in Vercel's Production environment to the production URL. Leave it unset for Preview deployments so each Vercel preview uses its own URL. In Supabase **Authentication → URL Configuration**, set the Site URL to the production URL and add the preview and local URLs to the Redirect URLs allow-list. If you customized the confirmation email, use `{{ .ConfirmationURL }}` so Supabase preserves the redirect URL passed by the app.
 
 ## Security boundaries
 

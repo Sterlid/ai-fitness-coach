@@ -10,9 +10,13 @@ import {
 } from 'react-native';
 
 import { setRememberMePreference, supabase } from '../../lib/supabase';
+import { getAuthRedirectUrl } from '../../config/env';
 import { colors } from '../../theme/colors';
 
-export type AuthMode = 'sign-in' | 'sign-up';
+export type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password';
+
+const minimumDateOfBirth = '1900-01-01';
+const dateTooEarlyMessage = 'Unless you have a time machine, please choose a date from 1900 onward.';
 
 type EmailAuthFormProps = {
   mode: AuthMode;
@@ -34,21 +38,42 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
     { label: 'One number or symbol', met: /[0-9]/.test(password) || /[^A-Za-z0-9\s]/.test(password) },
   ];
   const isStrongPassword = passwordRules.every((rule) => rule.met);
+  const dateOfBirthIsTooEarly =
+    mode === 'sign-up' && /^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) && dateOfBirth < minimumDateOfBirth;
 
-  const submit = async (mode: 'sign-in' | 'sign-up') => {
-    if (!supabase || !email || password.length < 8 || (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth))) {
+  const submit = async (mode: AuthMode) => {
+    const normalizedEmail = email.trim();
+
+    if (!supabase) {
+      setFeedback({ kind: 'error', text: 'Supabase is not configured for this environment.' });
+      return;
+    }
+
+    if (mode === 'forgot-password' && !normalizedEmail) {
+      setFeedback({ kind: 'error', text: 'Enter your email address to request a reset link.' });
+      return;
+    }
+
+    if (mode === 'sign-in' && (!normalizedEmail || !password)) {
+      setFeedback({ kind: 'error', text: 'Enter both your email and password.' });
+      return;
+    }
+
+    if (mode === 'sign-up' && (!fullName.trim() || !dateOfBirth || !normalizedEmail || !password)) {
       setFeedback({
         kind: 'error',
-        text:
-          mode === 'sign-up'
-            ? 'Enter your name, date of birth, email, and a password of at least 8 characters.'
-            : 'Enter an email and a password of at least 8 characters.',
+        text: 'Complete your name, date of birth, email, and password fields.',
       });
       return;
     }
 
     if (mode === 'sign-up' && !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
       setFeedback({ kind: 'error', text: 'Enter your date of birth as YYYY-MM-DD.' });
+      return;
+    }
+
+    if (mode === 'sign-up' && dateOfBirth < '1900-01-01') {
+      setFeedback({ kind: 'error', text: dateTooEarlyMessage });
       return;
     }
 
@@ -62,17 +87,28 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
     setRememberMePreference(mode === 'sign-in' ? rememberMe : true);
 
     try {
+      if (mode === 'forgot-password') {
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+          redirectTo: getAuthRedirectUrl('/reset-password'),
+        });
+
+        if (error) {
+          setFeedback({ kind: 'error', text: error.message });
+          return;
+        }
+
+        setFeedback({ kind: 'success', text: 'Check your inbox for a secure password reset link.' });
+        return;
+      }
+
       const result =
         mode === 'sign-in'
-          ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
+          ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
           : await supabase.auth.signUp({
-              email: email.trim(),
+              email: normalizedEmail,
               password,
               options: {
-                emailRedirectTo:
-                  Platform.OS === 'web' && typeof window !== 'undefined'
-                    ? window.location.origin
-                    : undefined,
+                emailRedirectTo: getAuthRedirectUrl(),
                 data: {
                   display_name: fullName.trim(),
                   date_of_birth: dateOfBirth,
@@ -84,10 +120,15 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
       if (result.error) {
         const isDuplicateEmail =
           mode === 'sign-up' && result.error.message.toLowerCase().includes('already registered');
+        const isInvalidCredentials =
+          mode === 'sign-in' &&
+          (result.error.code === 'invalid_credentials' || result.error.message.toLowerCase() === 'invalid login credentials');
         setFeedback({
           kind: 'error',
           text: isDuplicateEmail
             ? 'An account with this email already exists. Try signing in instead.'
+            : isInvalidCredentials
+            ? 'The email or password is incorrect.'
             : result.error.message,
         });
         return;
@@ -120,13 +161,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   return (
     <View style={mode === 'sign-up' ? [styles.container, styles.signUpContainer] : styles.container}>
       <Text style={mode === 'sign-up' ? [styles.eyebrow, styles.signUpEyebrow] : styles.eyebrow}>
-        {mode === 'sign-in' ? 'AI FITNESS COACH' : 'YOUR STARTING POINT'}
+        {mode === 'sign-in' ? 'AI FITNESS COACH' : mode === 'forgot-password' ? 'ACCOUNT RECOVERY' : 'YOUR STARTING POINT'}
       </Text>
-      <Text style={styles.title}>{mode === 'sign-in' ? 'Welcome back.' : 'Create your account.'}</Text>
+      <Text style={styles.title}>
+        {mode === 'sign-in' ? 'Welcome back.' : mode === 'forgot-password' ? 'Reset your password.' : 'Create your account.'}
+      </Text>
       <Text style={styles.subtitle}>
         {mode === 'sign-in'
           ? 'Sign in to continue your fitness journey.'
-          : 'Create an account to log meals and get workouts that adapt to you.'}
+          : mode === 'forgot-password'
+            ? 'Enter your email and we’ll send you a secure reset link.'
+            : 'Create an account to log meals and get workouts that adapt to you.'}
       </Text>
       <View style={styles.form}>
         {mode === 'sign-up' ? (
@@ -141,7 +186,8 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
               value={fullName}
             />
             <Text style={styles.fieldLabel}>Date of birth</Text>
-            <DateOfBirthField value={dateOfBirth} onChange={setDateOfBirth} />
+            <DateOfBirthField invalid={dateOfBirthIsTooEarly} value={dateOfBirth} onChange={setDateOfBirth} />
+            {dateOfBirthIsTooEarly ? <Text style={styles.fieldError}>{dateTooEarlyMessage}</Text> : null}
           </>
         ) : null}
         <TextInput
@@ -154,15 +200,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
           style={styles.input}
           value={email}
         />
-        <TextInput
-          autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
-          onChangeText={setPassword}
-          placeholder="Password"
-          placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          value={password}
-        />
+        {mode !== 'forgot-password' ? (
+          <TextInput
+            autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
+            onChangeText={setPassword}
+            placeholder="Password"
+            placeholderTextColor={colors.muted}
+            secureTextEntry
+            style={styles.input}
+            value={password}
+          />
+        ) : null}
         {mode === 'sign-up' ? (
           <View style={styles.passwordChecker}>
             <Text style={styles.passwordCheckerTitle}>
@@ -181,12 +229,17 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
           </View>
         ) : null}
         {mode === 'sign-in' ? (
-          <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
-            <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
-              {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
-            </View>
-            <Text style={styles.rememberText}>Remember me on this device</Text>
-          </Pressable>
+          <View style={styles.signInOptions}>
+            <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
+              <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
+                {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
+              </View>
+              <Text style={styles.rememberText}>Remember me on this device</Text>
+            </Pressable>
+            <Pressable onPress={() => onSwitchMode('forgot-password')}>
+              <Text style={styles.forgotPassword}>Forgot password?</Text>
+            </Pressable>
+          </View>
         ) : null}
         {feedback ? (
           <Text style={feedback.kind === 'error' ? styles.errorText : styles.successText}>
@@ -202,7 +255,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
             <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.primaryButtonText}>
-              {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+              {mode === 'sign-in' ? 'Sign in' : mode === 'forgot-password' ? 'Send reset link' : 'Create account'}
             </Text>
           )}
         </Pressable>
@@ -220,20 +273,36 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
 }
 
 type DateOfBirthFieldProps = {
+  invalid: boolean;
   value: string;
   onChange: (value: string) => void;
 };
 
-function DateOfBirthField({ value, onChange }: DateOfBirthFieldProps) {
+function DateOfBirthField({ invalid, value, onChange }: DateOfBirthFieldProps) {
   if (Platform.OS === 'web') {
-    return createElement('input', {
-      'aria-label': 'Date of birth',
-      max: new Date().toISOString().slice(0, 10),
-      onChange: (event: { target: { value: string } }) => onChange(event.target.value),
-      style: webDateInputStyle,
-      type: 'date',
-      value,
-    });
+    return (
+      <View style={invalid ? [webDateFieldStyle, webDateFieldInvalidStyle] : webDateFieldStyle}>
+        <Text style={value ? webDateValueStyle : webDatePlaceholderStyle}>
+          {formatDateForDisplay(value)}
+        </Text>
+        <View pointerEvents="none" style={webCalendarIcon}>
+          <View style={webCalendarIconTop} />
+          <View style={webCalendarIconRingLeft} />
+          <View style={webCalendarIconRingRight} />
+        </View>
+        {createElement('input', {
+          'aria-label': 'Date of birth',
+          'aria-invalid': invalid,
+          max: new Date().toISOString().slice(0, 10),
+          min: minimumDateOfBirth,
+          onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+          onClick: openWebDatePicker,
+          style: webDatePickerInputStyle,
+          type: 'date',
+          value,
+        })}
+      </View>
+    );
   }
 
   return (
@@ -244,29 +313,109 @@ function DateOfBirthField({ value, onChange }: DateOfBirthFieldProps) {
       onChangeText={onChange}
       placeholder="Date of birth (YYYY-MM-DD)"
       placeholderTextColor={colors.muted}
-      style={styles.input}
+      style={[styles.input, invalid && styles.invalidInput]}
       value={value}
     />
   );
 }
 
-const webDateInputStyle = {
-  appearance: 'auto',
+function openWebDatePicker(event: { currentTarget: { focus: () => void; showPicker?: () => void } }) {
+  event.currentTarget.focus();
+
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {
+    // Browsers without showPicker still retain the native calendar-icon behavior.
+  }
+}
+
+function formatDateForDisplay(value: string) {
+  if (!value) return 'dd/mm/yyyy';
+  const [year, month, day] = value.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+const webDateFieldStyle = {
   backgroundColor: colors.surface,
   borderColor: colors.border,
   borderRadius: 14,
-  borderStyle: 'solid',
+  borderStyle: 'solid' as const,
   borderWidth: 1,
-  boxSizing: 'border-box',
+  boxSizing: 'border-box' as const,
+  flexDirection: 'row' as const,
+  height: 52,
+  alignItems: 'center' as const,
+  justifyContent: 'space-between' as const,
+  paddingHorizontal: 16,
+  position: 'relative' as const,
+  width: '100%' as const,
+};
+
+const webDateFieldInvalidStyle = {
+  borderColor: colors.danger,
+  borderWidth: 2,
+};
+
+const webDateValueStyle = {
   color: colors.ink,
   fontFamily: 'inherit',
   fontSize: 16,
-  fontWeight: '400',
-  height: 52,
-  lineHeight: '20px',
-  padding: '15px 16px',
-  WebkitAppearance: 'auto',
-  width: '100%',
+  fontWeight: '400' as const,
+};
+
+const webDatePlaceholderStyle = {
+  ...webDateValueStyle,
+  color: colors.muted,
+};
+
+const webDatePickerInputStyle = {
+  bottom: 0,
+  cursor: 'pointer',
+  height: '100%',
+  left: 0,
+  opacity: 0,
+  position: 'absolute' as const,
+  right: 0,
+  top: 0,
+  width: '100%' as const,
+};
+
+const webCalendarIcon = {
+  borderColor: colors.ink,
+  borderRadius: 3,
+  borderWidth: 2,
+  height: 19,
+  position: 'relative' as const,
+  width: 20,
+};
+
+const webCalendarIconTop = {
+  backgroundColor: colors.ink,
+  height: 2,
+  left: 0,
+  position: 'absolute' as const,
+  right: 0,
+  top: 4,
+};
+
+const webCalendarIconRingLeft = {
+  backgroundColor: colors.ink,
+  borderRadius: 2,
+  height: 5,
+  position: 'absolute' as const,
+  right: 11,
+  top: -4,
+  width: 3,
+};
+
+const webCalendarIconRingRight = {
+  backgroundColor: colors.ink,
+  borderRadius: 2,
+  height: 5,
+  position: 'absolute' as const,
+  right: 3,
+  top: -4,
+  width: 3,
 };
 
 const styles = StyleSheet.create({
@@ -278,6 +427,7 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.muted, fontSize: 17, lineHeight: 25, marginTop: 10 },
   form: { gap: 14, marginTop: 32 },
   fieldLabel: { color: colors.ink, fontSize: 14, fontWeight: '700', marginBottom: -6 },
+  fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: -8 },
   input: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -288,6 +438,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 15,
   },
+  invalidInput: { borderColor: colors.danger, borderWidth: 2 },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.primary,
@@ -300,10 +451,12 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   successText: { color: colors.primaryDark, fontSize: 14, lineHeight: 20 },
   rememberRow: { alignItems: 'center', flexDirection: 'row', gap: 10, paddingVertical: 2 },
+  signInOptions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   checkbox: { alignItems: 'center', borderColor: colors.border, borderRadius: 5, borderWidth: 1, height: 20, justifyContent: 'center', width: 20 },
   checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxMark: { color: colors.white, fontSize: 14, fontWeight: '800', lineHeight: 18 },
   rememberText: { color: colors.muted, fontSize: 14 },
+  forgotPassword: { color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
   passwordChecker: { backgroundColor: colors.surface, borderRadius: 12, padding: 14 },
   passwordCheckerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 6 },
   passwordRuleRow: { borderRadius: 8, marginTop: 4, paddingHorizontal: 8, paddingVertical: 3 },

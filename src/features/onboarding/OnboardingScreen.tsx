@@ -64,6 +64,13 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
       if (profileError) throw profileError;
 
+      const { error: preferencesError } = await supabase.from('food_preferences').upsert(
+        { user_id: user.id },
+        { onConflict: 'user_id' },
+      );
+
+      if (preferencesError) throw preferencesError;
+
       const { data: existingGoal, error: existingGoalError } = await supabase
         .from('user_goals')
         .select('id')
