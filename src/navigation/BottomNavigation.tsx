@@ -25,7 +25,7 @@ export function BottomNavigation({ active }: BottomNavigationProps) {
           const onPress = item.key === 'home'
             ? () => navigateToPath('/home')
             : item.key === 'meals'
-              ? () => navigateToPath('/log-meal')
+              ? () => navigateToPath('/meals')
               : undefined;
 
           return (
@@ -44,9 +44,9 @@ export function BottomNavigation({ active }: BottomNavigationProps) {
               ]}
             >
               {item.key === 'home' ? (
-                <Image source={require('../../home_icon.png')} style={styles.imageIcon} />
+                <Image source={require('../../assets/images/home_icon.png')} style={styles.imageIcon} />
               ) : item.key === 'meals' ? (
-                <Image source={require('../../meal_icon.png')} style={styles.imageIcon} />
+                <Image source={require('../../assets/images/meal_icon.png')} style={styles.imageIcon} />
               ) : (
                 <Text style={[styles.icon, isActive && styles.activeIcon]}>{item.icon}</Text>
               )}

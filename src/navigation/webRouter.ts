@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { useEffect, useState } from 'react';
 
-export type AppPath = '/' | '/login' | '/sign-up' | '/setup' | '/home' | '/log-meal' | '/reset-password';
+export type AppPath = '/' | '/login' | '/sign-up' | '/setup' | '/home' | '/meals' | '/log-meal' | '/reset-password';
 
 let nativePath: AppPath = '/';
 const pathListeners = new Set<() => void>();
@@ -10,7 +10,7 @@ function currentPath(): AppPath {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return nativePath;
 
   const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/';
-  return normalizedPath === '/login' || normalizedPath === '/sign-up' || normalizedPath === '/setup' || normalizedPath === '/home' || normalizedPath === '/log-meal' || normalizedPath === '/reset-password'
+  return normalizedPath === '/login' || normalizedPath === '/sign-up' || normalizedPath === '/setup' || normalizedPath === '/home' || normalizedPath === '/meals' || normalizedPath === '/log-meal' || normalizedPath === '/reset-password'
     ? normalizedPath
     : '/';
 }

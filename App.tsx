@@ -5,6 +5,7 @@ import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-n
 import { AuthScreen } from './src/features/auth/AuthScreen';
 import { PasswordResetScreen } from './src/features/auth/PasswordResetScreen';
 import { HomeScreen } from './src/features/home/HomeScreen';
+import { MealsScreen } from './src/features/meals/MealsScreen';
 import { MealLogScreen } from './src/features/meals/MealLogScreen';
 import { OnboardingScreen } from './src/features/onboarding/OnboardingScreen';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
@@ -105,6 +106,7 @@ function AuthenticatedApp() {
   }
 
   if (!onboardingComplete) return <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />;
+  if (path === '/meals') return <MealsScreen />;
   if (path === '/log-meal') return <MealLogScreen />;
   return <HomeScreen />;
 }

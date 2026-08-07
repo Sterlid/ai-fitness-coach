@@ -429,7 +429,7 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.surfaceMuted, borderRadius: 18, marginTop: 24, padding: 18 },
+  container: { marginTop: 24 },
   title: { color: colors.ink, fontSize: 20, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 5 },
   fieldLabel: { color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 17 },
