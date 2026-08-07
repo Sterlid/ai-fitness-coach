@@ -10,6 +10,7 @@ Web-first calorie and workout coaching built with Expo, React Native Web, TypeSc
 - Migration-driven nutrition, meal, workout, recommendation, measurement, and feedback schema
 - Row Level Security for every user-owned table
 - Private `meal-images` storage bucket with per-user folder policies
+- Gemini-powered meal photo analysis with editable calorie and macro estimates
 - CI type checking
 
 ## Local setup
@@ -50,12 +51,37 @@ Restart Expo after changing environment variables.
 
 For hosted deployments, set `EXPO_PUBLIC_AUTH_REDIRECT_URL` in Vercel's Production environment to the production URL. Leave it unset for Preview deployments so each Vercel preview uses its own URL. In Supabase **Authentication → URL Configuration**, set the Site URL to the production URL and add the preview and local URLs to the Redirect URLs allow-list. If you customized the confirmation email, use `{{ .ConfirmationURL }}` so Supabase preserves the redirect URL passed by the app.
 
+## Gemini meal analysis
+
+The browser never receives the Gemini API key. Store it as a secret for the linked Supabase project, then deploy the Edge Function:
+
+```bash
+npx supabase secrets set GEMINI_API_KEY=your_key
+npx supabase functions deploy analyze-meal
+```
+
+The default model is `gemini-3.5-flash-lite`. To change it without editing the app:
+
+```bash
+npx supabase secrets set GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+For local testing, create an ignored `supabase/functions/.env` containing `GEMINI_API_KEY=your_key`, start Supabase, and serve the function:
+
+```bash
+npm run supabase:start
+npx supabase functions serve analyze-meal
+npm run web
+```
+
+AI nutrition values are estimates. The meal form keeps every result editable and records the model, confidence, assumptions, and original item estimates when the user saves it.
+
 ## Security boundaries
 
 - The publishable key is expected in the browser app; access is constrained by Row Level Security.
 - Never add the service-role key, database password, or an AI-provider secret to an `EXPO_PUBLIC_` variable.
 - Meal images are private and must be stored at `<auth-user-id>/<random-file-name>` inside `meal-images`.
-- AI-provider requests will be added later through a server-side Supabase Edge Function.
+- AI-provider requests run through a server-side Supabase Edge Function.
 
 ## Useful commands
 

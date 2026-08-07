@@ -1,14 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { MealLogForm } from '../meals/MealLogForm';
 import { supabase } from '../../lib/supabase';
+import { navigateToPath } from '../../navigation/webRouter';
+import { BottomNavigation } from '../../navigation/BottomNavigation';
 import { useAuth } from '../../providers/AuthProvider';
 import { colors } from '../../theme/colors';
 import type { Database } from '../../types/database';
 
 type Meal = Database['public']['Tables']['meals']['Row'];
 type MealMetadata = { meal_type?: string; serving?: string | null };
+
+function timeOfDay(hour: number) {
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
+
+function firstNameFor(user: ReturnType<typeof useAuth>['user']) {
+  const displayName = typeof user?.user_metadata?.display_name === 'string'
+    ? user.user_metadata.display_name.trim()
+    : '';
+  if (displayName) return displayName.split(/\s+/)[0];
+
+  const emailName = user?.email?.split('@')[0]?.split(/[._-]/)[0]?.trim();
+  return emailName ? emailName.charAt(0).toUpperCase() + emailName.slice(1) : 'there';
+}
 
 function mealMetadata(value: Meal['analysis_metadata']): MealMetadata {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
@@ -20,6 +37,10 @@ export function HomeScreen() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealImageUrls, setMealImageUrls] = useState<Record<string, string>>({});
   const [isLoadingMeals, setIsLoadingMeals] = useState(true);
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+  const greeting = timeOfDay(today.getHours());
+  const firstName = firstNameFor(user);
 
   const loadMeals = useCallback(async () => {
     if (!supabase || !user) return;
@@ -62,10 +83,10 @@ export function HomeScreen() {
   const protein = meals.reduce((total, meal) => total + Number(meal.protein_g ?? 0), 0);
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.eyebrow}>TODAY</Text>
-      <Text style={styles.title}>Good to see you.</Text>
-      <Text style={styles.email}>{user?.user_metadata?.display_name || user?.email}</Text>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.container} style={styles.scroll}>
+      <Text style={styles.eyebrow}>TODAY · {dateLabel}</Text>
+      <Text style={styles.title}>Good {greeting}, {firstName}</Text>
       <View style={styles.cardList}>
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Nutrition</Text>
@@ -83,7 +104,6 @@ export function HomeScreen() {
           <Text style={styles.cardNote}>A daily recommendation will appear here</Text>
         </View>
       </View>
-      <MealLogForm userId={user?.id ?? ''} onSaved={() => void loadMeals()} />
       <Text style={styles.sectionTitle}>Today’s meals</Text>
       {isLoadingMeals ? <Text style={styles.empty}>Loading meals…</Text> : null}
       {!isLoadingMeals && !meals.length ? <Text style={styles.empty}>Your logged meals will appear here.</Text> : null}
@@ -103,12 +123,16 @@ export function HomeScreen() {
       <Pressable onPress={() => void supabase?.auth.signOut()}>
         <Text style={styles.signOut}>Sign out</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+      <BottomNavigation active="home" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, paddingBottom: 48 },
+  screen: { flex: 1 },
+  scroll: { flex: 1 },
+  container: { padding: 24, paddingBottom: 112 },
   eyebrow: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.4, marginTop: 16 },
   title: { color: colors.ink, fontSize: 34, fontWeight: '800', marginTop: 8 },
   email: { color: colors.muted, fontSize: 14, marginTop: 4 },
@@ -126,5 +150,8 @@ const styles = StyleSheet.create({
   mealMeta: { color: colors.muted, fontSize: 13, marginTop: 4 },
   mealDescription: { color: colors.muted, fontSize: 12, marginTop: 4 },
   mealCalories: { color: colors.primaryDark, fontSize: 14, fontWeight: '800' },
+  primaryButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 14, justifyContent: 'center', marginTop: 22, minHeight: 48 },
+  primaryButtonText: { color: colors.white, fontSize: 15, fontWeight: '800' },
+  pressed: { opacity: 0.82 },
   signOut: { color: colors.danger, fontSize: 15, fontWeight: '700', marginTop: 28, textAlign: 'center' },
 });
