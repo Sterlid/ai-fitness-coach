@@ -10,11 +10,11 @@ import {
   View,
 } from 'react-native';
 
-import { supabase } from '../../lib/supabase';
 import { colors } from '../../theme/colors';
 import { analyzeMealPhoto, type MealAnalysis } from './mealAnalysis';
-
-type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+import type { MealType } from './mealTypes';
+import { optionalNumber } from './mealUtils';
+import { createMeal } from './services/mealService';
 
 const mealTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const quickDishes = [
@@ -33,21 +33,6 @@ type MealLogFormProps = {
 type SelectedImage = {
   file: File;
   previewUrl: string;
-};
-
-const optionalNumber = (value: string) => {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
-};
-
-const storagePathFor = (userId: string, file: File) => {
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const token =
-    typeof globalThis.crypto?.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `${userId}/${token}.${extension}`;
 };
 
 export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormProps) {
@@ -164,91 +149,20 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
     setIsSaving(true);
     setFeedback(null);
 
-    const source = selectedImage
-      ? description.trim()
-        ? 'photo_and_description'
-        : 'photo'
-      : description.trim()
-        ? 'description'
-        : 'manual';
-    const imagePath = selectedImage ? storagePathFor(userId, selectedImage.file) : null;
-
     try {
-      if (imagePath && selectedImage) {
-        const { error: uploadError } = await supabase?.storage.from('meal-images').upload(imagePath, selectedImage.file, {
-          cacheControl: '3600',
-          contentType: selectedImage.file.type,
-          upsert: false,
-        }) ?? { error: new Error('Supabase is not configured.') };
-
-        if (uploadError) {
-          setFeedback({ kind: 'error', text: `Photo upload failed: ${uploadError.message}` });
-          return;
-        }
-      }
-
-      const { data: savedMeal, error } = await supabase?.from('meals').insert({
-        user_id: userId,
-        name: name.trim(),
-        source,
-        description: description.trim() || null,
-        image_path: imagePath,
-        estimated_calories: calorieValue === null ? null : Math.round(calorieValue),
-        protein_g: proteinValue,
-        carbs_g: carbsValue,
-        fat_g: fatValue,
-        confidence_score: aiAnalysis?.confidence_score ?? null,
-        is_user_confirmed: true,
-        analysis_metadata: {
-          meal_type: mealType,
-          serving: serving.trim() || null,
-          ai_analysis: aiAnalysis ? {
-            provider: aiAnalysis.provider,
-            model: aiAnalysis.model,
-            analyzed_at: aiAnalysis.analyzed_at,
-            assumptions: aiAnalysis.assumptions,
-            warnings: aiAnalysis.warnings,
-            original_estimate: {
-              name: aiAnalysis.meal_name,
-              serving: aiAnalysis.serving,
-              calories: aiAnalysis.estimated_calories,
-              protein_g: aiAnalysis.protein_g,
-              carbs_g: aiAnalysis.carbs_g,
-              fat_g: aiAnalysis.fat_g,
-            },
-          } : null,
-        },
-      }).select('id').single() ?? { data: null, error: new Error('Supabase is not configured.') };
-
-      if (error) {
-        if (imagePath) await supabase?.storage.from('meal-images').remove([imagePath]);
-        setFeedback({ kind: 'error', text: error.message });
-        return;
-      }
-
-      if (savedMeal && aiAnalysis?.items.length) {
-        const { error: itemError } = await supabase?.from('meal_items').insert(
-          aiAnalysis.items.map((item, index) => ({
-            meal_id: savedMeal.id,
-            name: item.name,
-            quantity: item.quantity || null,
-            unit: item.unit || null,
-            calories: item.calories,
-            protein_g: item.protein_g,
-            carbs_g: item.carbs_g,
-            fat_g: item.fat_g,
-            confidence_score: item.confidence_score,
-            sort_order: index,
-          })),
-        ) ?? { error: new Error('Supabase is not configured.') };
-
-        if (itemError) {
-          await supabase?.from('meals').delete().eq('id', savedMeal.id);
-          if (imagePath) await supabase?.storage.from('meal-images').remove([imagePath]);
-          setFeedback({ kind: 'error', text: `Meal items could not be saved: ${itemError.message}` });
-          return;
-        }
-      }
+      await createMeal({
+        aiAnalysis,
+        calories: calorieValue,
+        carbs: carbsValue,
+        description,
+        fat: fatValue,
+        imageFile: selectedImage?.file ?? null,
+        mealType,
+        name,
+        protein: proteinValue,
+        serving,
+        userId,
+      });
 
       setMealType('Lunch');
       setName('');
@@ -262,6 +176,11 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
       setAiAnalysis(null);
       setFeedback({ kind: 'success', text: 'Meal added to Today.' });
       onSaved();
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'The meal could not be saved.',
+      });
     } finally {
       setIsSaving(false);
     }

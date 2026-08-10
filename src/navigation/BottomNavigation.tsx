@@ -47,6 +47,10 @@ export function BottomNavigation({ active }: BottomNavigationProps) {
                 <Image source={require('../../assets/images/home_icon.png')} style={styles.imageIcon} />
               ) : item.key === 'meals' ? (
                 <Image source={require('../../assets/images/meal_icon.png')} style={styles.imageIcon} />
+              ) : item.key === 'progress' ? (
+                <Image source={require('../../assets/images/progress_icon.png')} style={styles.imageIcon} />
+              ) : item.key === 'profile' ? (
+                <Image source={require('../../assets/images/profile_icon.png')} style={styles.imageIcon} />
               ) : (
                 <Text style={[styles.icon, isActive && styles.activeIcon]}>{item.icon}</Text>
               )}
