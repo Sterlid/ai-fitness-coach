@@ -2,14 +2,18 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomNavigation } from '../../navigation/BottomNavigation';
+import { getMealsView, navigateToMeals, type MealsView } from '../../navigation/webRouter';
 import { colors } from '../../theme/colors';
 import { MealHistoryView } from './MealHistoryView';
 import { TodayMealsView } from './TodayMealsView';
 
-type MealsView = 'today' | 'history';
-
 export function MealsScreen() {
-  const [activeView, setActiveView] = useState<MealsView>('today');
+  const [activeView, setActiveView] = useState<MealsView>(getMealsView);
+
+  const selectView = (view: MealsView) => {
+    setActiveView(view);
+    navigateToMeals(view, true);
+  };
 
   return (
     <View style={styles.screen}>
@@ -19,7 +23,7 @@ export function MealsScreen() {
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: activeView === 'today' }}
-            onPress={() => setActiveView('today')}
+            onPress={() => selectView('today')}
             style={[styles.viewToggleItem, activeView === 'today' && styles.activeViewToggleItem]}
           >
             <Text style={[styles.viewToggleText, activeView === 'today' && styles.activeViewToggleText]}>Today</Text>
@@ -27,7 +31,7 @@ export function MealsScreen() {
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: activeView === 'history' }}
-            onPress={() => setActiveView('history')}
+            onPress={() => selectView('history')}
             style={[styles.viewToggleItem, activeView === 'history' && styles.activeViewToggleItem]}
           >
             <Text style={[styles.viewToggleText, activeView === 'history' && styles.activeViewToggleText]}>History</Text>

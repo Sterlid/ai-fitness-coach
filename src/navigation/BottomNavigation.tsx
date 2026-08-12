@@ -13,7 +13,7 @@ const items: Array<{ key: NavigationKey; label: string; icon: string; enabled: b
   { key: 'home', label: 'Home', icon: '⌂', enabled: true },
   { key: 'meals', label: 'Meals', icon: '▤', enabled: true },
   { key: 'progress', label: 'Progress', icon: '▥', enabled: false },
-  { key: 'profile', label: 'Profile', icon: '●', enabled: false },
+  { key: 'profile', label: 'Profile', icon: '●', enabled: true },
 ];
 
 export function BottomNavigation({ active }: BottomNavigationProps) {
@@ -26,6 +26,8 @@ export function BottomNavigation({ active }: BottomNavigationProps) {
             ? () => navigateToPath('/home')
             : item.key === 'meals'
               ? () => navigateToPath('/meals')
+              : item.key === 'profile'
+                ? () => navigateToPath('/profile')
               : undefined;
 
           return (

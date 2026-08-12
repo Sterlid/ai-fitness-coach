@@ -1,8 +1,11 @@
 import { createElement, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,6 +32,7 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   const [fullName, setFullName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const passwordRules = [
@@ -159,116 +163,185 @@ export function EmailAuthForm({ mode, onSwitchMode }: EmailAuthFormProps) {
   };
 
   return (
-    <View style={mode === 'sign-up' ? [styles.container, styles.signUpContainer] : styles.container}>
-      <Text style={mode === 'sign-up' ? [styles.eyebrow, styles.signUpEyebrow] : styles.eyebrow}>
-        {mode === 'sign-in' ? 'AI FITNESS COACH' : mode === 'forgot-password' ? 'ACCOUNT RECOVERY' : 'YOUR STARTING POINT'}
-      </Text>
-      <Text style={styles.title}>
-        {mode === 'sign-in' ? 'Welcome back.' : mode === 'forgot-password' ? 'Reset your password.' : 'Create your account.'}
-      </Text>
-      <Text style={styles.subtitle}>
-        {mode === 'sign-in'
-          ? 'Sign in to continue your fitness journey.'
-          : mode === 'forgot-password'
-            ? 'Enter your email and we’ll send you a secure reset link.'
-            : 'Create an account to log meals and get workouts that adapt to you.'}
-      </Text>
-      <View style={styles.form}>
-        {mode === 'sign-up' ? (
-          <>
-            <TextInput
-              autoCapitalize="words"
-              autoComplete="name"
-              onChangeText={setFullName}
-              placeholder="Full name"
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={fullName}
-            />
-            <Text style={styles.fieldLabel}>Date of birth</Text>
-            <DateOfBirthField invalid={dateOfBirthIsTooEarly} value={dateOfBirth} onChange={setDateOfBirth} />
-            {dateOfBirthIsTooEarly ? <Text style={styles.fieldError}>{dateTooEarlyMessage}</Text> : null}
-          </>
-        ) : null}
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="Email"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={email}
-        />
-        {mode !== 'forgot-password' ? (
-          <TextInput
-            autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
-            onChangeText={setPassword}
-            placeholder="Password"
-            placeholderTextColor={colors.muted}
-            secureTextEntry
-            style={styles.input}
-            value={password}
-          />
-        ) : null}
-        {mode === 'sign-up' ? (
-          <View style={styles.passwordChecker}>
-            <Text style={styles.passwordCheckerTitle}>
-              Password strength: {isStrongPassword ? 'Strong' : password.length === 0 ? 'Not set' : 'Needs work'}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.screen}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        style={styles.screen}
+      >
+        <View style={styles.authStack}>
+          {mode === 'sign-in' ? (
+            <View style={styles.logoSlot}>
+              <Image
+                accessibilityLabel="Slacks or Stacks logo"
+                resizeMode="contain"
+                source={require('../../../assets/images/logo.png')}
+                style={styles.logo}
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.authContent}>
+            {mode === 'forgot-password' ? <Text style={styles.eyebrow}>ACCOUNT RECOVERY</Text> : null}
+            <Text style={styles.title}>
+              {mode === 'sign-up'
+                ? 'Create Your Account'
+                : mode === 'sign-in'
+                  ? 'Welcome Back!'
+                  : 'Reset Your Password'}
             </Text>
-            {passwordRules.map((rule) => (
-              <View
-                key={rule.label}
-                style={[styles.passwordRuleRow, rule.met ? styles.passwordRuleRowMet : styles.passwordRuleRowUnmet]}
-              >
-                <Text style={rule.met ? styles.passwordRuleMet : styles.passwordRule}>
-                  {rule.met ? '✓' : '○'} {rule.label}
+            <Text style={styles.subtitle}>
+              {mode === 'sign-in'
+                ? 'Your smarter way to manage fitness.'
+                : mode === 'forgot-password'
+                  ? 'Enter the email used for registration to reset your password.'
+                  : 'Create an account to log meals and get workouts that adapt to you.'}
+            </Text>
+
+            <View style={styles.form}>
+              {mode === 'sign-up' ? (
+                <>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Full name</Text>
+                    <TextInput
+                      autoCapitalize="words"
+                      autoComplete="name"
+                      onChangeText={setFullName}
+                      placeholder="Enter your full name"
+                      placeholderTextColor={colors.muted}
+                      style={styles.input}
+                      value={fullName}
+                    />
+                  </View>
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Date of birth</Text>
+                    <DateOfBirthField
+                      invalid={dateOfBirthIsTooEarly}
+                      onChange={setDateOfBirth}
+                      value={dateOfBirth}
+                    />
+                    {dateOfBirthIsTooEarly ? <Text style={styles.fieldError}>{dateTooEarlyMessage}</Text> : null}
+                  </View>
+                </>
+              ) : null}
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Email address</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={email}
+                />
+              </View>
+
+              {mode !== 'forgot-password' ? (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Password</Text>
+                  <View style={styles.passwordInputWrap}>
+                    <TextInput
+                      autoComplete={mode === 'sign-up' ? 'new-password' : 'password'}
+                      onChangeText={setPassword}
+                      placeholder="Enter your password"
+                      placeholderTextColor={colors.muted}
+                      secureTextEntry={!isPasswordVisible}
+                      style={[styles.input, styles.passwordInput]}
+                      value={password}
+                    />
+                    <Pressable
+                      accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
+                      accessibilityRole="button"
+                      hitSlop={10}
+                      onPress={() => setIsPasswordVisible((current) => !current)}
+                      style={styles.passwordVisibilityButton}
+                    >
+                      <View style={styles.eyeIcon}>
+                        <View style={styles.eyePupil} />
+                        {!isPasswordVisible ? <View style={styles.eyeSlash} /> : null}
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+
+              {mode === 'sign-up' ? (
+                <View style={styles.passwordChecker}>
+                  <Text style={styles.passwordCheckerTitle}>
+                    Password strength: {isStrongPassword ? 'Strong' : password.length === 0 ? 'Not set' : 'Needs work'}
+                  </Text>
+                  {passwordRules.map((rule) => (
+                    <View
+                      key={rule.label}
+                      style={[styles.passwordRuleRow, rule.met ? styles.passwordRuleRowMet : styles.passwordRuleRowUnmet]}
+                    >
+                      <Text style={rule.met ? styles.passwordRuleMet : styles.passwordRule}>
+                        {rule.met ? '✓' : '○'} {rule.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {mode === 'sign-in' ? (
+                <View style={styles.signInOptions}>
+                  <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
+                    <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
+                      {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.rememberText}>Remember me</Text>
+                  </Pressable>
+                  <Pressable onPress={() => onSwitchMode('forgot-password')}>
+                    <Text style={styles.forgotPassword}>Forgot Password?</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {feedback ? (
+                <Text style={feedback.kind === 'error' ? styles.errorText : styles.successText}>
+                  {feedback.text}
                 </Text>
-              </View>
-            ))}
+              ) : null}
+
+              <Pressable
+                disabled={isSubmitting}
+                onPress={() => void submit(mode)}
+                style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {mode === 'sign-in' ? 'Log In' : mode === 'forgot-password' ? 'Send reset link' : 'Create account'}
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                disabled={isSubmitting}
+                onPress={() => onSwitchMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
+                style={styles.secondaryButton}
+              >
+                {mode === 'sign-in' ? (
+                  <Text style={styles.secondaryPrompt}>
+                    Don't have an account? <Text style={styles.secondaryLink}>Sign up</Text>
+                  </Text>
+                ) : (
+                  <Text style={styles.secondaryLink}>Back to sign in</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        ) : null}
-        {mode === 'sign-in' ? (
-          <View style={styles.signInOptions}>
-            <Pressable onPress={() => setRememberMe((current) => !current)} style={styles.rememberRow}>
-              <View style={[styles.checkbox, rememberMe && styles.checkboxSelected]}>
-                {rememberMe ? <Text style={styles.checkboxMark}>✓</Text> : null}
-              </View>
-              <Text style={styles.rememberText}>Remember me on this device</Text>
-            </Pressable>
-            <Pressable onPress={() => onSwitchMode('forgot-password')}>
-              <Text style={styles.forgotPassword}>Forgot password?</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {feedback ? (
-          <Text style={feedback.kind === 'error' ? styles.errorText : styles.successText}>
-            {feedback.text}
-          </Text>
-        ) : null}
-        <Pressable
-          disabled={isSubmitting}
-          onPress={() => void submit(mode)}
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {mode === 'sign-in' ? 'Sign in' : mode === 'forgot-password' ? 'Send reset link' : 'Create account'}
-            </Text>
-          )}
-        </Pressable>
-        <Pressable
-          disabled={isSubmitting}
-          onPress={() => onSwitchMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {mode === 'sign-in' ? 'Create an account' : 'Back to sign in'}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -336,14 +409,14 @@ function formatDateForDisplay(value: string) {
 }
 
 const webDateFieldStyle = {
-  backgroundColor: colors.surface,
-  borderColor: colors.border,
+  backgroundColor: '#FFFFFF',
+  borderColor: '#E0DEE6',
   borderRadius: 14,
   borderStyle: 'solid' as const,
   borderWidth: 1,
   boxSizing: 'border-box' as const,
   flexDirection: 'row' as const,
-  height: 52,
+  height: 54,
   alignItems: 'center' as const,
   justifyContent: 'space-between' as const,
   paddingHorizontal: 16,
@@ -419,35 +492,95 @@ const webCalendarIconRingRight = {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  eyebrow: { color: colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
-  signUpContainer: { backgroundColor: colors.surfaceMuted, borderRadius: 24, paddingVertical: 28 },
-  signUpEyebrow: { color: colors.primaryDark },
-  title: { color: colors.ink, fontSize: 36, fontWeight: '800', marginTop: 10 },
-  subtitle: { color: colors.muted, fontSize: 17, lineHeight: 25, marginTop: 10 },
-  form: { gap: 14, marginTop: 32 },
-  fieldLabel: { color: colors.ink, fontSize: 14, fontWeight: '700', marginBottom: -6 },
-  fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: -8 },
+  screen: { backgroundColor: '#F5F4FA', flex: 1 },
+  container: {
+    alignItems: 'center',
+    backgroundColor: '#F5F4FA',
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+  },
+  authStack: { maxWidth: 420, transform: [{ translateY: -24 }], width: '100%' },
+  logoSlot: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    height: 112,
+    justifyContent: 'center',
+    marginBottom: 28,
+    overflow: 'hidden',
+    width: 180,
+  },
+  authContent: { width: '100%' },
+  logo: {
+    height: 250,
+    width: 250,
+  },
+  eyebrow: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  title: { color: '#101010', fontSize: 32, fontWeight: '700', textAlign: 'center' },
+  subtitle: { color: '#77727E', fontSize: 14, lineHeight: 19, marginTop: 6, textAlign: 'center' },
+  form: { gap: 16, marginTop: 28 },
+  fieldGroup: { gap: 8 },
+  fieldLabel: { color: '#181818', fontSize: 14, fontWeight: '600' },
+  fieldError: { color: colors.danger, fontSize: 13, lineHeight: 19 },
   input: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E0DEE6',
     borderRadius: 14,
     borderWidth: 1,
-    color: colors.ink,
+    color: '#252329',
     fontSize: 16,
+    minHeight: 54,
     paddingHorizontal: 16,
     paddingVertical: 15,
+  },
+  passwordInputWrap: { position: 'relative' },
+  passwordInput: { paddingRight: 52, width: '100%' },
+  passwordVisibilityButton: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 10,
+    top: 0,
+    width: 38,
+  },
+  eyeIcon: {
+    alignItems: 'center',
+    borderColor: colors.muted,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    height: 12,
+    justifyContent: 'center',
+    width: 19,
+  },
+  eyePupil: { backgroundColor: colors.muted, borderRadius: 3, height: 5, width: 5 },
+  eyeSlash: {
+    backgroundColor: colors.muted,
+    height: 1.5,
+    position: 'absolute',
+    transform: [{ rotate: '-40deg' }],
+    width: 24,
   },
   invalidInput: { borderColor: colors.danger, borderWidth: 2 },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.primary,
-    borderRadius: 14,
-    minHeight: 52,
+    borderRadius: 28,
     justifyContent: 'center',
+    minHeight: 54,
   },
   primaryButtonText: { color: colors.white, fontSize: 16, fontWeight: '800' },
-  secondaryButtonText: { color: colors.primaryDark, fontSize: 15, fontWeight: '700', textAlign: 'center' },
+  secondaryButton: { alignItems: 'center', marginTop: 8 },
+  secondaryPrompt: { color: '#6D6872', fontSize: 14, textAlign: 'center' },
+  secondaryLink: { color: colors.primaryDark, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   errorText: { color: colors.danger, fontSize: 14, lineHeight: 20 },
   successText: { color: colors.primaryDark, fontSize: 14, lineHeight: 20 },
   rememberRow: { alignItems: 'center', flexDirection: 'row', gap: 10, paddingVertical: 2 },
@@ -455,7 +588,7 @@ const styles = StyleSheet.create({
   checkbox: { alignItems: 'center', borderColor: colors.border, borderRadius: 5, borderWidth: 1, height: 20, justifyContent: 'center', width: 20 },
   checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxMark: { color: colors.white, fontSize: 14, fontWeight: '800', lineHeight: 18 },
-  rememberText: { color: colors.muted, fontSize: 14 },
+  rememberText: { color: '#6D6872', fontSize: 14 },
   forgotPassword: { color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
   passwordChecker: { backgroundColor: colors.surface, borderRadius: 12, padding: 14 },
   passwordCheckerTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', marginBottom: 6 },

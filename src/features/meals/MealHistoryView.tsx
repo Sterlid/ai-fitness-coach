@@ -1,6 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { navigateToPath } from '../../navigation/webRouter';
+import { navigateToMeal, navigateToPath } from '../../navigation/webRouter';
 import { colors } from '../../theme/colors';
 import { useMealHistory } from './hooks/useMealHistory';
 import { mealMetadata } from './mealUtils';
@@ -137,7 +137,13 @@ export function MealHistoryView() {
       ) : null}
 
       {selectedMeals.map((meal) => (
-        <View key={meal.id} style={styles.mealRow}>
+        <Pressable
+          accessibilityLabel={`Edit ${meal.name || 'meal'}`}
+          accessibilityRole="button"
+          key={meal.id}
+          onPress={() => navigateToMeal(meal.id, '/meals', 'history')}
+          style={({ pressed }) => [styles.mealRow, pressed && styles.pressed]}
+        >
           {mealImageUrls[meal.id] ? <Image source={{ uri: mealImageUrls[meal.id] }} style={styles.mealImage} /> : null}
           <View style={styles.mealInfo}>
             <Text style={styles.mealName}>{meal.name || 'Unnamed meal'}</Text>
@@ -147,7 +153,7 @@ export function MealHistoryView() {
             {meal.description ? <Text numberOfLines={1} style={styles.mealDescription}>{meal.description}</Text> : null}
           </View>
           <Text style={styles.mealCalories}>{meal.estimated_calories === null ? '—' : `${meal.estimated_calories} kcal`}</Text>
-        </View>
+        </Pressable>
       ))}
     </View>
   );

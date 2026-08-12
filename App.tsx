@@ -7,7 +7,9 @@ import { PasswordResetScreen } from './src/features/auth/PasswordResetScreen';
 import { HomeScreen } from './src/features/home/HomeScreen';
 import { MealsScreen } from './src/features/meals/MealsScreen';
 import { MealLogScreen } from './src/features/meals/MealLogScreen';
+import { MealDetailScreen } from './src/features/meals/MealDetailScreen';
 import { OnboardingScreen } from './src/features/onboarding/OnboardingScreen';
+import { ProfileScreen } from './src/features/profile/ProfileScreen';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
 import { supabase } from './src/lib/supabase';
 import { colors } from './src/theme/colors';
@@ -108,6 +110,8 @@ function AuthenticatedApp() {
   if (!onboardingComplete) return <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />;
   if (path === '/meals') return <MealsScreen />;
   if (path === '/log-meal') return <MealLogScreen />;
+  if (path === '/meal') return <MealDetailScreen />;
+  if (path === '/profile') return <ProfileScreen />;
   return <HomeScreen />;
 }
 

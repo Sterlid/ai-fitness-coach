@@ -7,6 +7,11 @@ type MealRangeResult = {
   imageUrls: Record<string, string>;
 };
 
+export type MealDetailResult = {
+  meal: Meal;
+  imageUrl: string | null;
+};
+
 type CreateMealInput = {
   userId: string;
   mealType: MealType;
@@ -19,6 +24,23 @@ type CreateMealInput = {
   fat: number | null;
   imageFile: File | null;
   aiAnalysis: MealAnalysis | null;
+};
+
+export type UpdateMealInput = {
+  userId: string;
+  mealId: string;
+  mealType: MealType;
+  name: string;
+  description: string;
+  serving: string;
+  eatenAt: string;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  currentImagePath: string | null;
+  imageFile: File | null;
+  removeImage: boolean;
 };
 
 function storagePathFor(userId: string, file: File) {
@@ -59,6 +81,110 @@ export async function getMealsBetween(userId: string, start: Date, end: Date): P
       imageEntries.filter((entry): entry is [string, string] => Boolean(entry[1])),
     ),
   };
+}
+
+export async function getMealById(userId: string, mealId: string): Promise<MealDetailResult> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const client = supabase;
+  const { data: meal, error } = await client
+    .from('meals')
+    .select('*')
+    .eq('id', mealId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!meal) throw new Error('This meal could not be found.');
+
+  let imageUrl: string | null = null;
+  if (meal.image_path) {
+    const { data } = await client.storage.from('meal-images').createSignedUrl(meal.image_path, 3600);
+    imageUrl = data?.signedUrl ?? null;
+  }
+
+  return { imageUrl, meal };
+}
+
+export async function updateMeal(input: UpdateMealInput) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const client = supabase;
+  const newImagePath = input.imageFile ? storagePathFor(input.userId, input.imageFile) : null;
+
+  if (newImagePath && input.imageFile) {
+    const { error: uploadError } = await client.storage.from('meal-images').upload(newImagePath, input.imageFile, {
+      cacheControl: '3600',
+      contentType: input.imageFile.type,
+      upsert: false,
+    });
+    if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
+  }
+
+  const nextImagePath = newImagePath ?? (input.removeImage ? null : input.currentImagePath);
+  const source = nextImagePath
+    ? input.description.trim()
+      ? 'photo_and_description'
+      : 'photo'
+    : input.description.trim()
+      ? 'description'
+      : 'manual';
+
+  const { data: currentMeal, error: lookupError } = await client
+    .from('meals')
+    .select('analysis_metadata')
+    .eq('id', input.mealId)
+    .eq('user_id', input.userId)
+    .maybeSingle();
+
+  if (lookupError || !currentMeal) {
+    if (newImagePath) await client.storage.from('meal-images').remove([newImagePath]);
+    throw new Error(lookupError?.message ?? 'This meal could not be found.');
+  }
+
+  const currentMetadata =
+    typeof currentMeal.analysis_metadata === 'object' &&
+    currentMeal.analysis_metadata !== null &&
+    !Array.isArray(currentMeal.analysis_metadata)
+      ? currentMeal.analysis_metadata
+      : {};
+  const { error } = await client
+    .from('meals')
+    .update({
+      analysis_metadata: {
+        ...currentMetadata,
+        meal_type: input.mealType,
+        serving: input.serving.trim() || null,
+      },
+      carbs_g: input.carbs,
+      description: input.description.trim() || null,
+      eaten_at: input.eatenAt,
+      estimated_calories: input.calories === null ? null : Math.round(input.calories),
+      fat_g: input.fat,
+      image_path: nextImagePath,
+      is_user_confirmed: true,
+      name: input.name.trim(),
+      protein_g: input.protein,
+      source,
+    })
+    .eq('id', input.mealId)
+    .eq('user_id', input.userId);
+
+  if (error) {
+    if (newImagePath) await client.storage.from('meal-images').remove([newImagePath]);
+    throw new Error(error.message);
+  }
+
+  if (input.currentImagePath && input.currentImagePath !== nextImagePath) {
+    await client.storage.from('meal-images').remove([input.currentImagePath]);
+  }
+}
+
+export async function deleteMeal(userId: string, mealId: string, imagePath: string | null) {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const client = supabase;
+  const { error } = await client.from('meals').delete().eq('id', mealId).eq('user_id', userId);
+  if (error) throw new Error(error.message);
+
+  if (imagePath) await client.storage.from('meal-images').remove([imagePath]);
 }
 
 export async function createMeal(input: CreateMealInput) {

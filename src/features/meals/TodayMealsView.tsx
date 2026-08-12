@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { navigateToPath } from '../../navigation/webRouter';
+import { navigateToMeal, navigateToPath } from '../../navigation/webRouter';
 import { colors } from '../../theme/colors';
 import { useTodayNutrition } from './hooks/useTodayNutrition';
 import { mealMetadata } from './mealUtils';
@@ -12,23 +11,12 @@ const defaultProteinTarget = 100;
 export function TodayMealsView() {
   const {
     isLoading,
-    isSavingTargets,
     loadError,
     mealImageUrls,
     meals,
     targets,
     totals,
-    updateTargets,
   } = useTodayNutrition();
-  const [isEditingTargets, setIsEditingTargets] = useState(false);
-  const [calorieInput, setCalorieInput] = useState(String(defaultCalorieTarget));
-  const [proteinInput, setProteinInput] = useState(String(defaultProteinTarget));
-  const [targetFeedback, setTargetFeedback] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
-
-  useEffect(() => {
-    setCalorieInput(String(targets.calories ?? defaultCalorieTarget));
-    setProteinInput(String(targets.protein ?? defaultProteinTarget));
-  }, [targets.calories, targets.protein]);
 
   const calorieTarget = targets.calories ?? defaultCalorieTarget;
   const proteinTarget = targets.protein ?? defaultProteinTarget;
@@ -42,27 +30,6 @@ export function TodayMealsView() {
     year: 'numeric',
   });
 
-  const saveTargets = async () => {
-    const calories = Number(calorieInput);
-    const protein = Number(proteinInput);
-    if (!Number.isFinite(calories) || calories <= 0 || !Number.isFinite(protein) || protein <= 0) {
-      setTargetFeedback({ kind: 'error', text: 'Enter calorie and protein targets greater than zero.' });
-      return;
-    }
-
-    setTargetFeedback(null);
-    try {
-      await updateTargets(calories, protein);
-      setIsEditingTargets(false);
-      setTargetFeedback({ kind: 'success', text: 'Daily targets updated.' });
-    } catch (error) {
-      setTargetFeedback({
-        kind: 'error',
-        text: error instanceof Error ? error.message : 'Targets could not be saved.',
-      });
-    }
-  };
-
   return (
     <View>
       <View style={styles.progressCard}>
@@ -73,19 +40,10 @@ export function TodayMealsView() {
           </View>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              if (isEditingTargets) {
-                setCalorieInput(String(targets.calories ?? defaultCalorieTarget));
-                setProteinInput(String(targets.protein ?? defaultProteinTarget));
-              }
-              setIsEditingTargets((current) => !current);
-              setTargetFeedback(null);
-            }}
-            style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+            onPress={() => navigateToPath('/profile')}
+            style={({ pressed }) => [styles.profileHint, pressed && styles.pressed]}
           >
-            <Text style={styles.settingsButtonText}>
-              {isEditingTargets ? 'Cancel' : targets.calories && targets.protein ? 'Edit targets' : 'Set targets'}
-            </Text>
+            <Text style={styles.profileHintText}>Targets in Profile</Text>
           </Pressable>
         </View>
 
@@ -117,48 +75,6 @@ export function TodayMealsView() {
         >
           <View style={[styles.proteinProgressFill, { width: `${proteinProgress}%` as `${number}%` }]} />
         </View>
-
-        {isEditingTargets ? (
-          <View style={styles.settingsPanel}>
-            <Text style={styles.settingsTitle}>Daily targets</Text>
-            <View style={styles.settingsFields}>
-              <View style={styles.settingsField}>
-                <Text style={styles.inputLabel}>Calories</Text>
-                <TextInput
-                  keyboardType="number-pad"
-                  onChangeText={setCalorieInput}
-                  placeholder="2000"
-                  placeholderTextColor={colors.muted}
-                  style={styles.input}
-                  value={calorieInput}
-                />
-              </View>
-              <View style={styles.settingsField}>
-                <Text style={styles.inputLabel}>Protein (g)</Text>
-                <TextInput
-                  keyboardType="decimal-pad"
-                  onChangeText={setProteinInput}
-                  placeholder="100"
-                  placeholderTextColor={colors.muted}
-                  style={styles.input}
-                  value={proteinInput}
-                />
-              </View>
-            </View>
-            <Pressable
-              disabled={isSavingTargets}
-              onPress={() => void saveTargets()}
-              style={({ pressed }) => [styles.saveTargetsButton, pressed && styles.pressed]}
-            >
-              {isSavingTargets
-                ? <ActivityIndicator color={colors.white} size="small" />
-                : <Text style={styles.saveTargetsButtonText}>Save targets</Text>}
-            </Pressable>
-          </View>
-        ) : null}
-        {targetFeedback ? (
-          <Text style={targetFeedback.kind === 'error' ? styles.error : styles.success}>{targetFeedback.text}</Text>
-        ) : null}
       </View>
 
       <View style={styles.dayHeader}>
@@ -196,7 +112,13 @@ export function TodayMealsView() {
       ) : null}
 
       {meals.map((meal) => (
-        <View key={meal.id} style={styles.mealRow}>
+        <Pressable
+          accessibilityLabel={`Edit ${meal.name || 'meal'}`}
+          accessibilityRole="button"
+          key={meal.id}
+          onPress={() => navigateToMeal(meal.id)}
+          style={({ pressed }) => [styles.mealRow, pressed && styles.pressed]}
+        >
           {mealImageUrls[meal.id] ? <Image source={{ uri: mealImageUrls[meal.id] }} style={styles.mealImage} /> : null}
           <View style={styles.mealInfo}>
             <Text style={styles.mealName}>{meal.name || 'Unnamed meal'}</Text>
@@ -206,7 +128,7 @@ export function TodayMealsView() {
             {meal.description ? <Text numberOfLines={1} style={styles.mealDescription}>{meal.description}</Text> : null}
           </View>
           <Text style={styles.mealCalories}>{meal.estimated_calories === null ? '—' : `${meal.estimated_calories} kcal`}</Text>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -217,8 +139,8 @@ const styles = StyleSheet.create({
   progressHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   progressEyebrow: { color: colors.primary, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   progressTitle: { color: colors.ink, fontSize: 20, fontWeight: '800', marginTop: 4 },
-  settingsButton: { backgroundColor: colors.surfaceMuted, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  settingsButtonText: { color: colors.primaryDark, fontSize: 12, fontWeight: '800' },
+  profileHint: { backgroundColor: colors.surfaceMuted, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  profileHintText: { color: colors.muted, fontSize: 10, fontWeight: '800' },
   calorieNumbers: { alignItems: 'baseline', flexDirection: 'row', marginTop: 20 },
   calorieValue: { color: colors.ink, fontSize: 34, fontWeight: '800' },
   calorieTarget: { color: colors.muted, fontSize: 15, fontWeight: '700' },
@@ -231,14 +153,6 @@ const styles = StyleSheet.create({
   proteinValue: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   proteinTrack: { backgroundColor: colors.surfaceMuted, borderRadius: 5, height: 9, marginTop: 8, overflow: 'hidden' },
   proteinProgressFill: { backgroundColor: colors.primaryDark, borderRadius: 5, height: '100%' },
-  settingsPanel: { borderColor: colors.border, borderTopWidth: 1, marginTop: 20, paddingTop: 16 },
-  settingsTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
-  settingsFields: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  settingsField: { flex: 1 },
-  inputLabel: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  input: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: 10, borderWidth: 1, color: colors.ink, fontSize: 15, marginTop: 6, paddingHorizontal: 12, paddingVertical: 11 },
-  saveTargetsButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 11, justifyContent: 'center', marginTop: 12, minHeight: 44 },
-  saveTargetsButtonText: { color: colors.white, fontSize: 14, fontWeight: '800' },
   dayHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 24 },
   dayHeadingText: { flex: 1, paddingRight: 12 },
   dayTitle: { color: colors.ink, fontSize: 21, fontWeight: '800' },
@@ -251,7 +165,6 @@ const styles = StyleSheet.create({
   macroLabel: { color: colors.muted, fontSize: 11, marginTop: 3 },
   empty: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 14 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: 12 },
-  success: { color: colors.primaryDark, fontSize: 13, lineHeight: 19, marginTop: 12 },
   mealRow: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 14, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, padding: 15 },
   mealImage: { borderRadius: 10, height: 54, marginRight: 11, width: 54 },
   mealInfo: { flex: 1 },
