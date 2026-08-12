@@ -5,7 +5,11 @@ import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-n
 import { AuthScreen } from './src/features/auth/AuthScreen';
 import { PasswordResetScreen } from './src/features/auth/PasswordResetScreen';
 import { HomeScreen } from './src/features/home/HomeScreen';
+import { MealsScreen } from './src/features/meals/MealsScreen';
+import { MealLogScreen } from './src/features/meals/MealLogScreen';
+import { MealDetailScreen } from './src/features/meals/MealDetailScreen';
 import { OnboardingScreen } from './src/features/onboarding/OnboardingScreen';
+import { ProfileScreen } from './src/features/profile/ProfileScreen';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
 import { supabase } from './src/lib/supabase';
 import { colors } from './src/theme/colors';
@@ -61,6 +65,7 @@ function AppContent() {
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+  const path = useAppPath();
   const [isCheckingProfile, setIsCheckingProfile] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
@@ -85,8 +90,14 @@ function AuthenticatedApp() {
   }, [user]);
 
   useEffect(() => {
-    if (!isCheckingProfile) navigateToPath(onboardingComplete ? '/home' : '/setup', true);
-  }, [isCheckingProfile, onboardingComplete]);
+    if (isCheckingProfile) return;
+
+    if (!onboardingComplete && path !== '/setup') {
+      navigateToPath('/setup', true);
+    } else if (onboardingComplete && (path === '/' || path === '/login' || path === '/sign-up' || path === '/setup')) {
+      navigateToPath('/home', true);
+    }
+  }, [isCheckingProfile, onboardingComplete, path]);
 
   if (isCheckingProfile) {
     return (
@@ -96,11 +107,12 @@ function AuthenticatedApp() {
     );
   }
 
-  return onboardingComplete ? (
-    <HomeScreen />
-  ) : (
-    <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />
-  );
+  if (!onboardingComplete) return <OnboardingScreen onComplete={() => setOnboardingComplete(true)} />;
+  if (path === '/meals') return <MealsScreen />;
+  if (path === '/log-meal') return <MealLogScreen />;
+  if (path === '/meal') return <MealDetailScreen />;
+  if (path === '/profile') return <ProfileScreen />;
+  return <HomeScreen />;
 }
 
 export default function App() {

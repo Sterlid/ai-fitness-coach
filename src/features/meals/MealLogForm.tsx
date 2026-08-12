@@ -10,10 +10,11 @@ import {
   View,
 } from 'react-native';
 
-import { supabase } from '../../lib/supabase';
 import { colors } from '../../theme/colors';
-
-type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+import { analyzeMealPhoto, type MealAnalysis } from './mealAnalysis';
+import type { MealType } from './mealTypes';
+import { optionalNumber } from './mealUtils';
+import { createMeal } from './services/mealService';
 
 const mealTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const quickDishes = [
@@ -26,6 +27,7 @@ const quickDishes = [
 type MealLogFormProps = {
   userId: string;
   onSaved: () => void;
+  showHeader?: boolean;
 };
 
 type SelectedImage = {
@@ -33,22 +35,7 @@ type SelectedImage = {
   previewUrl: string;
 };
 
-const optionalNumber = (value: string) => {
-  if (!value.trim()) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
-};
-
-const storagePathFor = (userId: string, file: File) => {
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const token =
-    typeof globalThis.crypto?.randomUUID === 'function'
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `${userId}/${token}.${extension}`;
-};
-
-export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
+export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormProps) {
   const [mealType, setMealType] = useState<MealType>('Lunch');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -58,6 +45,8 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<MealAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
 
@@ -79,8 +68,8 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
     input.onchange = () => {
       const file = input.files?.[0];
       if (!file) return;
-      if (file.size > 10 * 1024 * 1024) {
-        setFeedback({ kind: 'error', text: 'Choose an image smaller than 10 MB.' });
+      if (file.size > 8 * 1024 * 1024) {
+        setFeedback({ kind: 'error', text: 'Choose an image smaller than 8 MB.' });
         return;
       }
 
@@ -88,6 +77,7 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
         if (current) URL.revokeObjectURL(current.previewUrl);
         return { file, previewUrl: URL.createObjectURL(file) };
       });
+      setAiAnalysis(null);
       setFeedback(null);
     };
     input.click();
@@ -99,7 +89,40 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
     setProtein(String(dish.protein));
     setCarbs(String(dish.carbs));
     setFat(String(dish.fat));
+    setAiAnalysis(null);
     setFeedback(null);
+  };
+
+  const analyzePhoto = async () => {
+    if (!selectedImage) {
+      setFeedback({ kind: 'error', text: 'Add a meal photo before asking AI to analyze it.' });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setFeedback(null);
+    try {
+      const analysis = await analyzeMealPhoto(selectedImage.file, description, serving);
+      setAiAnalysis(analysis);
+      setName(analysis.meal_name);
+      setServing(analysis.serving);
+      setCalories(String(analysis.estimated_calories));
+      setProtein(String(analysis.protein_g));
+      setCarbs(String(analysis.carbs_g));
+      setFat(String(analysis.fat_g));
+      setFeedback({
+        kind: 'success',
+        text: 'AI estimate ready. Review and adjust the portions or nutrition before saving.',
+      });
+    } catch (error) {
+      setAiAnalysis(null);
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'The meal could not be analyzed.',
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const saveMeal = async () => {
@@ -126,51 +149,20 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
     setIsSaving(true);
     setFeedback(null);
 
-    const source = selectedImage
-      ? description.trim()
-        ? 'photo_and_description'
-        : 'photo'
-      : description.trim()
-        ? 'description'
-        : 'manual';
-    const imagePath = selectedImage ? storagePathFor(userId, selectedImage.file) : null;
-
     try {
-      if (imagePath && selectedImage) {
-        const { error: uploadError } = await supabase?.storage.from('meal-images').upload(imagePath, selectedImage.file, {
-          cacheControl: '3600',
-          contentType: selectedImage.file.type,
-          upsert: false,
-        }) ?? { error: new Error('Supabase is not configured.') };
-
-        if (uploadError) {
-          setFeedback({ kind: 'error', text: `Photo upload failed: ${uploadError.message}` });
-          return;
-        }
-      }
-
-      const { error } = await supabase?.from('meals').insert({
-        user_id: userId,
-        name: name.trim(),
-        source,
-        description: description.trim() || null,
-        image_path: imagePath,
-        estimated_calories: calorieValue === null ? null : Math.round(calorieValue),
-        protein_g: proteinValue,
-        carbs_g: carbsValue,
-        fat_g: fatValue,
-        is_user_confirmed: true,
-        analysis_metadata: {
-          meal_type: mealType,
-          serving: serving.trim() || null,
-        },
-      }) ?? { error: new Error('Supabase is not configured.') };
-
-      if (error) {
-        if (imagePath) await supabase?.storage.from('meal-images').remove([imagePath]);
-        setFeedback({ kind: 'error', text: error.message });
-        return;
-      }
+      await createMeal({
+        aiAnalysis,
+        calories: calorieValue,
+        carbs: carbsValue,
+        description,
+        fat: fatValue,
+        imageFile: selectedImage?.file ?? null,
+        mealType,
+        name,
+        protein: proteinValue,
+        serving,
+        userId,
+      });
 
       setMealType('Lunch');
       setName('');
@@ -181,8 +173,14 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
       setCarbs('');
       setFat('');
       setSelectedImage(null);
+      setAiAnalysis(null);
       setFeedback({ kind: 'success', text: 'Meal added to Today.' });
       onSaved();
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'The meal could not be saved.',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -190,8 +188,12 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Log a meal</Text>
-      <Text style={styles.subtitle}>Capture the dish, portion, nutrition, and a photo if you have one.</Text>
+      {showHeader ? (
+        <>
+          <Text style={styles.title}>Log a meal</Text>
+          <Text style={styles.subtitle}>Capture the dish, portion, nutrition, and a photo if you have one.</Text>
+        </>
+      ) : null}
 
       <Text style={styles.fieldLabel}>Meal type</Text>
       <View style={styles.chipRow}>
@@ -239,7 +241,7 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
           style={[styles.input, styles.halfInput]}
           value={serving}
         />
-        <Pressable onPress={chooseImage} style={styles.photoButton}>
+        <Pressable disabled={isAnalyzing} onPress={chooseImage} style={styles.photoButton}>
           <Text style={styles.photoButtonText}>{selectedImage ? 'Change photo' : 'Add photo'}</Text>
         </Pressable>
       </View>
@@ -249,10 +251,51 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
           <Image source={{ uri: selectedImage.previewUrl }} style={styles.photoPreview} />
           <View style={styles.photoPreviewInfo}>
             <Text style={styles.photoName} numberOfLines={1}>{selectedImage.file.name}</Text>
-            <Pressable onPress={() => setSelectedImage(null)}>
+            <Pressable onPress={() => {
+              setSelectedImage(null);
+              setAiAnalysis(null);
+            }}>
               <Text style={styles.removePhoto}>Remove photo</Text>
             </Pressable>
           </View>
+        </View>
+      ) : null}
+
+      {selectedImage ? (
+        <>
+          <Pressable
+            disabled={isAnalyzing || isSaving}
+            onPress={() => void analyzePhoto()}
+            style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}
+          >
+            {isAnalyzing ? (
+              <View style={styles.aiButtonContent}>
+                <ActivityIndicator color={colors.primaryDark} size="small" />
+                <Text style={styles.aiButtonText}>Analyzing meal…</Text>
+              </View>
+            ) : (
+              <Text style={styles.aiButtonText}>{aiAnalysis ? 'Analyze photo again' : 'Estimate nutrition with AI'}</Text>
+            )}
+          </Pressable>
+          <Text style={styles.aiPrivacyNote}>Your photo and notes are sent to Google Gemini for this estimate.</Text>
+        </>
+      ) : null}
+
+      {aiAnalysis ? (
+        <View style={styles.aiResult}>
+          <View style={styles.aiResultHeader}>
+            <Text style={styles.aiResultTitle}>Gemini estimate</Text>
+            <Text style={styles.confidence}>{aiAnalysis.confidence_score}% confidence</Text>
+          </View>
+          {aiAnalysis.items.map((item, index) => (
+            <Text key={`${item.name}-${index}`} style={styles.aiItem}>
+              • {item.name}{item.quantity ? ` — ${item.quantity} ${item.unit}` : ''} ({item.calories} kcal)
+            </Text>
+          ))}
+          {[...aiAnalysis.assumptions, ...aiAnalysis.warnings].map((note, index) => (
+            <Text key={`${note}-${index}`} style={styles.aiNote}>Check: {note}</Text>
+          ))}
+          <Text style={styles.aiDisclaimer}>Photo-based nutrition is approximate. Edit anything that looks wrong.</Text>
         </View>
       ) : null}
 
@@ -294,7 +337,7 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
 
       {feedback ? <Text style={feedback.kind === 'error' ? styles.error : styles.success}>{feedback.text}</Text> : null}
       <Pressable
-        disabled={isSaving}
+        disabled={isSaving || isAnalyzing}
         onPress={() => void saveMeal()}
         style={({ pressed }) => [styles.button, pressed && styles.pressed]}
       >
@@ -305,7 +348,7 @@ export function MealLogForm({ userId, onSaved }: MealLogFormProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: colors.surfaceMuted, borderRadius: 18, marginTop: 24, padding: 18 },
+  container: { marginTop: 24 },
   title: { color: colors.ink, fontSize: 20, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 5 },
   fieldLabel: { color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 17 },
@@ -330,6 +373,17 @@ const styles = StyleSheet.create({
   photoPreviewInfo: { flex: 1, marginLeft: 10 },
   photoName: { color: colors.ink, fontSize: 13, fontWeight: '700' },
   removePhoto: { color: colors.danger, fontSize: 12, fontWeight: '700', marginTop: 6 },
+  aiButton: { alignItems: 'center', backgroundColor: '#E0F0E5', borderColor: colors.primary, borderRadius: 12, borderWidth: 1, justifyContent: 'center', marginTop: 10, minHeight: 46, paddingHorizontal: 14 },
+  aiButtonContent: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  aiButtonText: { color: colors.primaryDark, fontSize: 14, fontWeight: '800' },
+  aiPrivacyNote: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5, textAlign: 'center' },
+  aiResult: { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: 12, borderWidth: 1, marginTop: 10, padding: 13 },
+  aiResultHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
+  aiResultTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
+  confidence: { color: colors.primaryDark, fontSize: 12, fontWeight: '800' },
+  aiItem: { color: colors.ink, fontSize: 13, lineHeight: 19 },
+  aiNote: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  aiDisclaimer: { color: colors.danger, fontSize: 11, fontWeight: '700', lineHeight: 16, marginTop: 8 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: 10 },
   success: { color: colors.primaryDark, fontSize: 13, lineHeight: 19, marginTop: 10 },
   button: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 12, justifyContent: 'center', marginTop: 14, minHeight: 46 },
