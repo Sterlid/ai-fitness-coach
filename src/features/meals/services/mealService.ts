@@ -194,7 +194,7 @@ export async function createMeal(input: CreateMealInput) {
     ? input.description.trim()
       ? 'photo_and_description'
       : 'photo'
-    : input.description.trim()
+    : input.aiAnalysis || input.description.trim()
       ? 'description'
       : 'manual';
   const imagePath = input.imageFile ? storagePathFor(input.userId, input.imageFile) : null;
