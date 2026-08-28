@@ -42,14 +42,22 @@ function fileToBase64(file: File) {
   });
 }
 
-export async function analyzeMealPhoto(file: File, description: string, serving: string) {
+type AnalyzeMealInput = {
+  file: File | null;
+  dish: string;
+  description: string;
+  serving: string;
+};
+
+export async function analyzeMeal({ file, dish, description, serving }: AnalyzeMealInput) {
   if (!supabase) throw new Error('Supabase is not configured.');
 
-  const imageBase64 = await fileToBase64(file);
+  const imageBase64 = file ? await fileToBase64(file) : undefined;
   const { data, error } = await supabase.functions.invoke<MealAnalysis>('analyze-meal', {
     body: {
       imageBase64,
-      mimeType: file.type,
+      mimeType: file?.type,
+      dish: dish.trim(),
       description: description.trim(),
       serving: serving.trim(),
     },
@@ -64,6 +72,6 @@ export async function analyzeMealPhoto(file: File, description: string, serving:
     }
     throw new Error(message);
   }
-  if (!data?.is_food) throw new Error('That does not look like a meal. Try a clearer photo.');
+  if (!data?.is_food) throw new Error('That does not appear to describe a meal. Check the details and try again.');
   return data;
 }

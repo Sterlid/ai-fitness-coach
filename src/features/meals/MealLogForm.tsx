@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 
 import { colors } from '../../theme/colors';
-import { analyzeMealPhoto, type MealAnalysis } from './mealAnalysis';
+import { analyzeMeal, type MealAnalysis } from './mealAnalysis';
 import type { MealType } from './mealTypes';
 import { optionalNumber } from './mealUtils';
 import { createMeal } from './services/mealService';
@@ -36,6 +36,7 @@ type SelectedImage = {
 };
 
 export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormProps) {
+  const [showDetails, setShowDetails] = useState(false);
   const [mealType, setMealType] = useState<MealType>('Lunch');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -77,10 +78,17 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
         if (current) URL.revokeObjectURL(current.previewUrl);
         return { file, previewUrl: URL.createObjectURL(file) };
       });
+      setShowDetails(true);
       setAiAnalysis(null);
       setFeedback(null);
     };
     input.click();
+  };
+
+  const removePhoto = () => {
+    setSelectedImage(null);
+    setAiAnalysis(null);
+    setFeedback(null);
   };
 
   const applyQuickDish = (dish: (typeof quickDishes)[number]) => {
@@ -93,32 +101,37 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
     setFeedback(null);
   };
 
-  const analyzePhoto = async () => {
-    if (!selectedImage) {
-      setFeedback({ kind: 'error', text: 'Add a meal photo before asking AI to analyze it.' });
+  const estimateNutrition = async () => {
+    if (!selectedImage && (!name.trim() || !serving.trim())) {
+      setFeedback({ kind: 'error', text: 'Add a dish name and serving size before estimating nutrition.' });
       return;
     }
 
     setIsAnalyzing(true);
     setFeedback(null);
     try {
-      const analysis = await analyzeMealPhoto(selectedImage.file, description, serving);
+      const analysis = await analyzeMeal({
+        description,
+        dish: name,
+        file: selectedImage?.file ?? null,
+        serving,
+      });
       setAiAnalysis(analysis);
-      setName(analysis.meal_name);
-      setServing(analysis.serving);
+      setName(analysis.meal_name || name);
+      setServing(analysis.serving || serving);
       setCalories(String(analysis.estimated_calories));
       setProtein(String(analysis.protein_g));
       setCarbs(String(analysis.carbs_g));
       setFat(String(analysis.fat_g));
       setFeedback({
         kind: 'success',
-        text: 'AI estimate ready. Review and adjust the portions or nutrition before saving.',
+        text: 'AI estimate ready. Review and adjust the meal before saving.',
       });
     } catch (error) {
       setAiAnalysis(null);
       setFeedback({
         kind: 'error',
-        text: error instanceof Error ? error.message : 'The meal could not be analyzed.',
+        text: error instanceof Error ? error.message : 'The meal could not be estimated.',
       });
     } finally {
       setIsAnalyzing(false);
@@ -164,6 +177,7 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
         userId,
       });
 
+      setShowDetails(false);
       setMealType('Lunch');
       setName('');
       setDescription('');
@@ -174,7 +188,6 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
       setFat('');
       setSelectedImage(null);
       setAiAnalysis(null);
-      setFeedback({ kind: 'success', text: 'Meal added to Today.' });
       onSaved();
     } catch (error) {
       setFeedback({
@@ -190,203 +203,277 @@ export function MealLogForm({ userId, onSaved, showHeader = true }: MealLogFormP
     <View style={styles.container}>
       {showHeader ? (
         <>
-          <Text style={styles.title}>Log a meal</Text>
-          <Text style={styles.subtitle}>Capture the dish, portion, nutrition, and a photo if you have one.</Text>
+          <Text style={styles.title}>Add meal</Text>
+          <Text style={styles.subtitle}>Start with a photo, or enter the meal details yourself.</Text>
         </>
       ) : null}
 
-      <Text style={styles.fieldLabel}>Meal type</Text>
-      <View style={styles.chipRow}>
-        {mealTypes.map((type) => (
-          <Pressable
-            key={type}
-            onPress={() => setMealType(type)}
-            style={[styles.chip, mealType === type && styles.selectedChip]}
-          >
-            <Text style={[styles.chipText, mealType === type && styles.selectedChipText]}>{type}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={styles.fieldLabel}>Quick add a dish</Text>
-      <View style={styles.quickDishRow}>
-        {quickDishes.map((dish) => (
-          <Pressable key={dish.name} onPress={() => applyQuickDish(dish)} style={styles.quickDish}>
-            <Text style={styles.quickDishText}>{dish.name}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <TextInput
-        onChangeText={setName}
-        placeholder="Dish or meal name"
-        placeholderTextColor={colors.muted}
-        style={styles.input}
-        value={name}
-      />
-      <TextInput
-        onChangeText={setDescription}
-        multiline
-        placeholder="What was in it? Add ingredients, sauces, or notes"
-        placeholderTextColor={colors.muted}
-        style={[styles.input, styles.descriptionInput]}
-        value={description}
-      />
-
-      <View style={styles.row}>
-        <TextInput
-          onChangeText={setServing}
-          placeholder="Serving (e.g. 1 bowl)"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.halfInput]}
-          value={serving}
-        />
-        <Pressable disabled={isAnalyzing} onPress={chooseImage} style={styles.photoButton}>
-          <Text style={styles.photoButtonText}>{selectedImage ? 'Change photo' : 'Add photo'}</Text>
+      <View style={styles.photoCard}>
+        <Pressable
+          accessibilityLabel={selectedImage ? 'Replace meal photo' : 'Add meal photo'}
+          accessibilityRole="button"
+          disabled={isAnalyzing || isSaving}
+          onPress={chooseImage}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          {selectedImage ? (
+            <Image source={{ uri: selectedImage.previewUrl }} style={styles.photo} />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoPlaceholderIcon}>+</Text>
+              <Text style={styles.photoPlaceholderTitle}>Add a meal photo</Text>
+              <Text style={styles.photoPlaceholderText}>JPEG, PNG, or WebP up to 8 MB</Text>
+            </View>
+          )}
         </Pressable>
-      </View>
-
-      {selectedImage ? (
-        <View style={styles.photoPreviewRow}>
-          <Image source={{ uri: selectedImage.previewUrl }} style={styles.photoPreview} />
-          <View style={styles.photoPreviewInfo}>
-            <Text style={styles.photoName} numberOfLines={1}>{selectedImage.file.name}</Text>
-            <Pressable onPress={() => {
-              setSelectedImage(null);
-              setAiAnalysis(null);
-            }}>
-              <Text style={styles.removePhoto}>Remove photo</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      {selectedImage ? (
-        <>
+        <View style={styles.photoActions}>
           <Pressable
             disabled={isAnalyzing || isSaving}
-            onPress={() => void analyzePhoto()}
-            style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}
+            onPress={chooseImage}
+            style={({ pressed }) => [styles.photoButton, pressed && styles.pressed]}
           >
-            {isAnalyzing ? (
-              <View style={styles.aiButtonContent}>
-                <ActivityIndicator color={colors.primaryDark} size="small" />
-                <Text style={styles.aiButtonText}>Analyzing meal…</Text>
-              </View>
-            ) : (
-              <Text style={styles.aiButtonText}>{aiAnalysis ? 'Analyze photo again' : 'Estimate nutrition with AI'}</Text>
-            )}
+            <Text style={styles.photoButtonText}>{selectedImage ? 'Replace photo' : 'Add photo'}</Text>
           </Pressable>
-          <Text style={styles.aiPrivacyNote}>Your photo and notes are sent to Google Gemini for this estimate.</Text>
-        </>
-      ) : null}
-
-      {aiAnalysis ? (
-        <View style={styles.aiResult}>
-          <View style={styles.aiResultHeader}>
-            <Text style={styles.aiResultTitle}>Gemini estimate</Text>
-            <Text style={styles.confidence}>{aiAnalysis.confidence_score}% confidence</Text>
-          </View>
-          {aiAnalysis.items.map((item, index) => (
-            <Text key={`${item.name}-${index}`} style={styles.aiItem}>
-              • {item.name}{item.quantity ? ` — ${item.quantity} ${item.unit}` : ''} ({item.calories} kcal)
-            </Text>
-          ))}
-          {[...aiAnalysis.assumptions, ...aiAnalysis.warnings].map((note, index) => (
-            <Text key={`${note}-${index}`} style={styles.aiNote}>Check: {note}</Text>
-          ))}
-          <Text style={styles.aiDisclaimer}>Photo-based nutrition is approximate. Edit anything that looks wrong.</Text>
+          {selectedImage ? (
+            <Pressable disabled={isAnalyzing || isSaving} onPress={removePhoto} style={({ pressed }) => pressed && styles.pressed}>
+              <Text style={styles.removePhotoText}>Remove</Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.photoActionHint}>Use a photo for a quicker estimate</Text>
+          )}
         </View>
-      ) : null}
-
-      <Text style={styles.fieldLabel}>Nutrition <Text style={styles.optional}>(optional)</Text></Text>
-      <View style={styles.row}>
-        <TextInput
-          keyboardType="decimal-pad"
-          onChangeText={setCalories}
-          placeholder="Calories"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.quarterInput]}
-          value={calories}
-        />
-        <TextInput
-          keyboardType="decimal-pad"
-          onChangeText={setProtein}
-          placeholder="Protein g"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.quarterInput]}
-          value={protein}
-        />
-        <TextInput
-          keyboardType="decimal-pad"
-          onChangeText={setCarbs}
-          placeholder="Carbs g"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.quarterInput]}
-          value={carbs}
-        />
-        <TextInput
-          keyboardType="decimal-pad"
-          onChangeText={setFat}
-          placeholder="Fat g"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.quarterInput]}
-          value={fat}
-        />
       </View>
 
-      {feedback ? <Text style={feedback.kind === 'error' ? styles.error : styles.success}>{feedback.text}</Text> : null}
-      <Pressable
-        disabled={isSaving || isAnalyzing}
-        onPress={() => void saveMeal()}
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-      >
-        {isSaving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Add meal</Text>}
-      </Pressable>
+      {!showDetails ? (
+        <View style={styles.manualChoice}>
+          <Text style={styles.manualChoiceText}>No photo? You can still estimate a meal from its details.</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setShowDetails(true);
+              setFeedback(null);
+            }}
+            style={({ pressed }) => [styles.manualButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.manualButtonText}>Add manually</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.form}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Meal type</Text>
+            <View style={styles.chipRow}>
+              {mealTypes.map((type) => (
+                <Pressable
+                  key={type}
+                  onPress={() => setMealType(type)}
+                  style={[styles.chip, mealType === type && styles.selectedChip]}
+                >
+                  <Text style={[styles.chipText, mealType === type && styles.selectedChipText]}>{type}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Quick add a dish</Text>
+            <View style={styles.quickDishRow}>
+              {quickDishes.map((dish) => (
+                <Pressable key={dish.name} onPress={() => applyQuickDish(dish)} style={styles.quickDish}>
+                  <Text style={styles.quickDishText}>{dish.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Dish name</Text>
+            <TextInput
+              onChangeText={setName}
+              placeholder="e.g. Chicken rice"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              value={name}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput
+              multiline
+              onChangeText={setDescription}
+              placeholder="Ingredients, sauces, or how it was prepared"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, styles.descriptionInput]}
+              value={description}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Serving size</Text>
+            <TextInput
+              onChangeText={setServing}
+              placeholder="e.g. 1 bowl, 250 g, or 2 slices"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              value={serving}
+            />
+          </View>
+
+          <View style={styles.estimateCard}>
+            <Text style={styles.estimateTitle}>Estimate nutrition with AI</Text>
+            <Text style={styles.estimateDescription}>
+              {selectedImage
+                ? 'Gemini will use the photo and any details you provide.'
+                : 'Enter a dish name and serving size. More detail gives a better estimate.'}
+            </Text>
+            <Pressable
+              disabled={isAnalyzing || isSaving}
+              onPress={() => void estimateNutrition()}
+              style={({ pressed }) => [styles.aiButton, pressed && styles.pressed]}
+            >
+              {isAnalyzing ? (
+                <View style={styles.aiButtonContent}>
+                  <ActivityIndicator color={colors.primaryDark} size="small" />
+                  <Text style={styles.aiButtonText}>Estimating meal…</Text>
+                </View>
+              ) : (
+                <Text style={styles.aiButtonText}>{aiAnalysis ? 'Estimate again' : 'Estimate nutrition'}</Text>
+              )}
+            </Pressable>
+            <Text style={styles.aiPrivacyNote}>
+              {selectedImage ? 'Your photo and meal details' : 'Your meal details'} are sent to Google Gemini for this estimate.
+            </Text>
+          </View>
+
+          {aiAnalysis ? (
+            <View style={styles.aiResult}>
+              <View style={styles.aiResultHeader}>
+                <Text style={styles.aiResultTitle}>Gemini estimate</Text>
+                <Text style={styles.confidence}>{aiAnalysis.confidence_score}% confidence</Text>
+              </View>
+              {aiAnalysis.items.map((item, index) => (
+                <Text key={`${item.name}-${index}`} style={styles.aiItem}>
+                  • {item.name}{item.quantity ? ` — ${item.quantity} ${item.unit}` : ''} ({item.calories} kcal)
+                </Text>
+              ))}
+              {[...aiAnalysis.assumptions, ...aiAnalysis.warnings].map((note, index) => (
+                <Text key={`${note}-${index}`} style={styles.aiNote}>Check: {note}</Text>
+              ))}
+              <Text style={styles.aiDisclaimer}>AI nutrition estimates are approximate. Edit anything that looks wrong.</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Nutrition <Text style={styles.optional}>(optional)</Text></Text>
+            <View style={styles.nutritionGrid}>
+              <NutritionField label="Calories" onChange={setCalories} unit="kcal" value={calories} />
+              <NutritionField label="Protein" onChange={setProtein} unit="g" value={protein} />
+              <NutritionField label="Carbs" onChange={setCarbs} unit="g" value={carbs} />
+              <NutritionField label="Fat" onChange={setFat} unit="g" value={fat} />
+            </View>
+          </View>
+
+          {feedback ? <Text style={feedback.kind === 'error' ? styles.error : styles.success}>{feedback.text}</Text> : null}
+          <Pressable
+            disabled={isSaving || isAnalyzing}
+            onPress={() => void saveMeal()}
+            style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}
+          >
+            {isSaving ? <ActivityIndicator color={colors.white} /> : <Text style={styles.saveButtonText}>Add meal</Text>}
+          </Pressable>
+        </View>
+      )}
+
+      {!showDetails && feedback ? (
+        <Text style={feedback.kind === 'error' ? styles.error : styles.success}>{feedback.text}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+type NutritionFieldProps = {
+  label: string;
+  onChange: (value: string) => void;
+  unit: string;
+  value: string;
+};
+
+function NutritionField({ label, onChange, unit, value }: NutritionFieldProps) {
+  return (
+    <View style={styles.nutritionField}>
+      <Text style={styles.nutritionLabel}>{label}</Text>
+      <View style={styles.nutritionInputWrap}>
+        <TextInput
+          keyboardType="decimal-pad"
+          onChangeText={onChange}
+          placeholder="0"
+          placeholderTextColor={colors.muted}
+          style={styles.nutritionInput}
+          value={value}
+        />
+        <Text style={styles.nutritionUnit}>{unit}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 24 },
-  title: { color: colors.ink, fontSize: 20, fontWeight: '800' },
+  container: { marginTop: 22 },
+  title: { color: colors.ink, fontSize: 32, fontWeight: '800' },
   subtitle: { color: colors.muted, fontSize: 14, lineHeight: 20, marginTop: 5 },
-  fieldLabel: { color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 17 },
+  photoCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  photo: { height: 210, width: '100%' },
+  photoPlaceholder: { alignItems: 'center', backgroundColor: colors.surfaceMuted, height: 190, justifyContent: 'center' },
+  photoPlaceholderIcon: { color: colors.primary, fontSize: 32, fontWeight: '700' },
+  photoPlaceholderTitle: { color: colors.ink, fontSize: 15, fontWeight: '800', marginTop: 7 },
+  photoPlaceholderText: { color: colors.muted, fontSize: 12, marginTop: 5 },
+  photoActions: { alignItems: 'center', flexDirection: 'row', gap: 14, padding: 13 },
+  photoButton: { backgroundColor: colors.surfaceMuted, borderRadius: 10, paddingHorizontal: 13, paddingVertical: 9 },
+  photoButtonText: { color: colors.primaryDark, fontSize: 13, fontWeight: '800' },
+  photoActionHint: { color: colors.muted, flex: 1, fontSize: 11, lineHeight: 15 },
+  removePhotoText: { color: colors.danger, fontSize: 13, fontWeight: '700' },
+  manualChoice: { alignItems: 'center', marginTop: 20 },
+  manualChoiceText: { color: colors.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  manualButton: { alignItems: 'center', borderColor: colors.primary, borderRadius: 12, borderWidth: 1, justifyContent: 'center', marginTop: 12, minHeight: 48, width: '100%' },
+  manualButtonText: { color: colors.primaryDark, fontSize: 14, fontWeight: '800' },
+  form: { gap: 20, marginTop: 24 },
+  fieldGroup: { gap: 8 },
+  fieldLabel: { color: colors.ink, fontSize: 13, fontWeight: '800' },
   optional: { color: colors.muted, fontWeight: '500' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
-  chip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
   selectedChip: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   selectedChipText: { color: colors.white },
-  quickDishRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
+  quickDishRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quickDish: { backgroundColor: '#E0F0E5', borderRadius: 10, maxWidth: '48%', paddingHorizontal: 11, paddingVertical: 9 },
   quickDishText: { color: colors.primaryDark, fontSize: 12, fontWeight: '700' },
-  input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 15, marginTop: 12, minWidth: 0, paddingHorizontal: 14, paddingVertical: 13 },
-  row: { flexDirection: 'row', gap: 9 },
-  halfInput: { flex: 1 },
-  quarterInput: { flex: 1, paddingHorizontal: 9 },
-  descriptionInput: { minHeight: 76, textAlignVertical: 'top' },
-  photoButton: { alignItems: 'center', backgroundColor: colors.ink, borderRadius: 12, justifyContent: 'center', marginTop: 12, minWidth: 112, paddingHorizontal: 12 },
-  photoButtonText: { color: colors.white, fontSize: 13, fontWeight: '800' },
-  photoPreviewRow: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', marginTop: 12, padding: 8 },
-  photoPreview: { borderRadius: 8, height: 64, width: 64 },
-  photoPreviewInfo: { flex: 1, marginLeft: 10 },
-  photoName: { color: colors.ink, fontSize: 13, fontWeight: '700' },
-  removePhoto: { color: colors.danger, fontSize: 12, fontWeight: '700', marginTop: 6 },
-  aiButton: { alignItems: 'center', backgroundColor: '#E0F0E5', borderColor: colors.primary, borderRadius: 12, borderWidth: 1, justifyContent: 'center', marginTop: 10, minHeight: 46, paddingHorizontal: 14 },
+  input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 12, borderWidth: 1, color: colors.ink, fontSize: 15, minHeight: 50, paddingHorizontal: 14, paddingVertical: 13 },
+  descriptionInput: { minHeight: 92, textAlignVertical: 'top' },
+  estimateCard: { backgroundColor: colors.surfaceMuted, borderRadius: 14, padding: 14 },
+  estimateTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  estimateDescription: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  aiButton: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: 11, borderWidth: 1, justifyContent: 'center', marginTop: 12, minHeight: 46, paddingHorizontal: 14 },
   aiButtonContent: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   aiButtonText: { color: colors.primaryDark, fontSize: 14, fontWeight: '800' },
-  aiPrivacyNote: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 5, textAlign: 'center' },
-  aiResult: { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: 12, borderWidth: 1, marginTop: 10, padding: 13 },
+  aiPrivacyNote: { color: colors.muted, fontSize: 11, lineHeight: 16, marginTop: 7, textAlign: 'center' },
+  aiResult: { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: 12, borderWidth: 1, padding: 13 },
   aiResultHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 },
   aiResultTitle: { color: colors.ink, fontSize: 14, fontWeight: '800' },
   confidence: { color: colors.primaryDark, fontSize: 12, fontWeight: '800' },
   aiItem: { color: colors.ink, fontSize: 13, lineHeight: 19 },
   aiNote: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
   aiDisclaimer: { color: colors.danger, fontSize: 11, fontWeight: '700', lineHeight: 16, marginTop: 8 },
-  error: { color: colors.danger, fontSize: 13, lineHeight: 19, marginTop: 10 },
-  success: { color: colors.primaryDark, fontSize: 13, lineHeight: 19, marginTop: 10 },
-  button: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 12, justifyContent: 'center', marginTop: 14, minHeight: 46 },
-  buttonText: { color: colors.white, fontSize: 15, fontWeight: '800' },
-  pressed: { opacity: 0.82 },
+  nutritionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  nutritionField: { flexBasis: '47%', flexGrow: 1, gap: 6 },
+  nutritionLabel: { color: colors.muted, fontSize: 11, fontWeight: '700' },
+  nutritionInputWrap: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row' },
+  nutritionInput: { color: colors.ink, flex: 1, fontSize: 15, minHeight: 48, paddingHorizontal: 12, paddingVertical: 12 },
+  nutritionUnit: { color: colors.muted, fontSize: 11, paddingRight: 12 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 19 },
+  success: { color: colors.primaryDark, fontSize: 13, lineHeight: 19 },
+  saveButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 13, justifyContent: 'center', minHeight: 52 },
+  saveButtonText: { color: colors.white, fontSize: 15, fontWeight: '800' },
+  pressed: { opacity: 0.78 },
 });
